@@ -1,0 +1,70 @@
+{
+  "emby": {
+    "host": "http://192.168.1.100:8096",
+    "api_key": "your_emby_api_key_here",
+    "scan_after_download": true,
+    "timeout": 30
+  },
+  "themes": {
+    "output_dir": "/mnt/media/Themes",
+    "organization": "by_media_type",
+    "naming_pattern": "{title}.theme.mp3"
+  },
+  "sources": {
+    "animethemes": {
+      "enabled": true,
+      "priority": 1,
+      "api_url": "https://api.animethemes.moe"
+    },
+    "youtube": {
+      "enabled": false,
+      "priority": 2,
+      "timeout": 60
+    },
+    "spotify": {
+      "enabled": false,
+      "priority": 3,
+      "client_id": "your_spotify_client_id",
+      "client_secret": "your_spotify_client_secret"
+    },
+    "local": {
+      "enabled": true,
+      "priority": 4,
+      "search_paths": [
+        "/mnt/media/Themes",
+        "/home/user/Music/Themes"
+      ]
+    }
+  },
+  "matching": {
+    "method": "fuzzy",
+    "threshold": 70,
+    "case_sensitive": false
+  },
+  "download": {
+    "concurrent_downloads": 3,
+    "retry_failed": true,
+    "max_retries": 3,
+    "timeout": 60
+  },
+  "organization": {
+    "by_media_type": true,
+    "folder_structure": "{media_type}/{title}/",
+    "move_after_download": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "mouflopening.log",
+    "max_file_size": 10485760,
+    "backup_count": 5
+  },
+  "database": {
+    "type": "sqlite",
+    "path": "mouflopening.db"
+  },
+  "scheduler": {
+    "enabled": true,
+    "interval_hours": 24,
+    "scan_missing_interval_hours": 12
+  }
+}
