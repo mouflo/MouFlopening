@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.17.1] - 2026-10-05
+
+### Amélioré
+- Quand un traitement automatique est terminé, un bouton « ✕ Fermer » apparaît dans la fenêtre « Dernier traitement » : il retire la fenêtre et la barre verte « Terminé », qui ne reviennent pas au rechargement de la page (elles réapparaissent au prochain traitement)
+
 ## [0.17.0] - 2026-10-05
 
 ### Amélioré

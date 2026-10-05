@@ -135,7 +135,7 @@
         <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
     </div>
     <div class="panel livelog" id="batchLogBox" style="display:none">
-        <div class="livehead"><span id="liveTitle">Dernier traitement</span><button type="button" class="btn ghost small" id="liveMore">Tout voir</button></div>
+        <div class="livehead"><span id="liveTitle">Dernier traitement</span><span><button type="button" class="btn ghost small" id="liveMore">Tout voir</button> <button type="button" class="btn ghost small" id="liveClose" style="display:none" title="Fermer ce résultat">✕ Fermer</button></span></div>
         <div class="livewin" id="batchLogTxt"></div>
     </div>
     <div id="globalNote"></div>
@@ -472,13 +472,17 @@ let pollTimer = null;
 async function pollBatch() {
     const s = await api('/api/batch/status');
     const n = s.done + s.failed;
-    $('progress').classList.toggle('show', s.running || s.total > 0);
+    const sig = s.total + ':' + s.done + ':' + s.failed + ':' + (s.messages || []).length;     // identifie le dernier traitement terminé
+    let closed = false; try { closed = !s.running && localStorage.getItem('batchClosed') === sig; } catch (e) {}
+    s.lastSig = sig;
+    $('liveClose').style.display = s.running ? 'none' : ''; window.lastBatchSig = sig;
+    $('progress').classList.toggle('show', !closed && (s.running || s.total > 0));
     $('bar').style.width = (s.total ? Math.round(100 * n / s.total) : 0) + '%';
     const norm = s.kind === 'normalize';
     $('progTxt').textContent = s.running ? `${norm ? '🔊 ' : ''}${n}/${s.total} · ${s.current || ''}` : (s.total ? (norm ? `Terminé : ${s.done} thème(s) vérifié(s), ${s.failed} en erreur` : `Terminé : ${s.done} ajouté(s), ${s.failed} introuvable(s)`) : '');
     $('batchStart').style.display = s.running ? 'none' : ''; $('normStart').style.display = s.running ? 'none' : ''; $('batchStop').style.display = s.running ? '' : 'none';
     const msgs = (s.messages || []).concat(s.running && s.current ? ['⏳ ' + s.current + '…'] : []), win = $('batchLogTxt');
-    $('batchLogBox').style.display = msgs.length ? '' : 'none';
+    $('batchLogBox').style.display = msgs.length && !closed ? '' : 'none';
     $('liveTitle').textContent = s.running ? (norm ? 'Normalisation en cours…' : 'Téléchargement en cours…') : 'Dernier traitement';
     if (win.dataset.n !== msgs.join('|').length + ':' + msgs.length) {     // on ne redessine que s'il y a du nouveau ; on suit la dernière ligne sauf si on a remonté la fenêtre à la main
         const atEnd = win.scrollHeight - win.scrollTop - win.clientHeight < 40;
@@ -498,6 +502,10 @@ $('batchStart').addEventListener('click', async () => {
 $('normStart').addEventListener('click', async () => {
     if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier data/themes-backup sur le serveur). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;
     const r = await post('/api/normalize/start', {}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+});
+$('liveClose').addEventListener('click', () => {      // traitement terminé : on retire le résultat (barre verte + fenêtre), il ne reviendra pas au rechargement
+    try { localStorage.setItem('batchClosed', window.lastBatchSig); } catch (e) {}
+    $('batchLogBox').style.display = 'none'; $('progress').classList.remove('show');
 });
 $('liveMore').addEventListener('click', () => {
     const w = $('batchLogTxt'), big = w.classList.toggle('big');
