@@ -26,6 +26,22 @@ from src.config import load_config, load_secrets_env
 BASE_DIR = Path(__file__).resolve().parent
 load_secrets_env()   # identifiants et clé Emby (data/secrets.env), avant l'initialisation de la connexion
 
+
+def _tmdb_key_from_moufloster():
+    """Pas de clé TheMovieDB ici : on reprend celle de MouFloster (même serveur, même compte) sans la copier ni l'afficher."""
+    if os.getenv("TMDB_API_KEY", "").strip():
+        return
+    try:
+        for line in Path("/opt/moufloster/data/secrets.env").read_text(encoding="utf-8").splitlines():
+            if line.startswith("TMDB_API_KEY="):
+                os.environ["TMDB_API_KEY"] = line.split("=", 1)[1].strip().strip("'\"")
+                return
+    except OSError:
+        pass
+
+
+_tmdb_key_from_moufloster()
+
 from src import library
 from src.emby_client import EmbyClient
 from src.fsutil import safe_move
@@ -202,13 +218,30 @@ def _run_batch(limit, with_seasons, cat=0):
             BATCH.update(running=False, current="")
 
 
+def original_title_for(series, title, kind):
+    """Titre original : d'abord Emby, sinon TheMovieDB (dossier vide créé par Radarr, pas encore scanné…). -> (titre, remarque)"""
+    orig, why = EMBY.original_title(series.name, title, kind, series.parent.name)
+    if orig:
+        return orig, ""
+    from src import title_lookup
+    online, why2 = title_lookup.original_title(series.name, library.clean_title(series.name), kind, os.getenv("TMDB_API_KEY", "").strip())
+    if online:
+        return online, ""
+    return "", f"{why} ; {why2}"
+
+
 def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
     """Choisit automatiquement le meilleur générique, l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
     series = series or folder
     query = query or (title if number is None else library.season_query(title, number))
     source = source_for(kind)
     with _work_lock:
-        result = source.search(query, "anime" if kind == "anime" else ("movie" if kind == "movie" else "tv"))
+        mtype = "anime" if kind == "anime" else ("movie" if kind == "movie" else "tv")
+        result = source.search(query, mtype)
+        if not result and number is None:             # rien sous le titre du dossier : on tente le titre original
+            alt, _ = original_title_for(series, title, kind)
+            if alt and alt.casefold() != query.casefold():
+                result = source.search(alt, mtype)
         if not result:
             return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
         _backup_existing(folder)
@@ -339,7 +372,7 @@ def api_search():
         # titre original d'après Emby (le titre français ne donne pas toujours de résultat)
         folder, series, _ = library.resolve_target(ROOTS, body.get("id", ""))
         if series:
-            orig, why = EMBY.original_title(series.name, title, kind, series.parent.name)
+            orig, why = original_title_for(series, title, kind)
             if orig and orig.casefold() not in (t.casefold() for t in titles):
                 titles.insert(0, orig)                    # le titre original a plus de chances d'avoir des sources : on le cherche en premier
             elif orig:
@@ -469,6 +502,8 @@ try:
 except Exception:
     logger.exception("Migration des anciennes sauvegardes impossible")
 emby_settings.init_app(app, BASE_DIR, lambda: EMBY.host, _emby_key_changed)
+import tmdb_settings
+tmdb_settings.init_app(app, BASE_DIR)
 diag.init_app(app, APP_VERSION, lambda: ROOTS, EMBY.describe, _batch_state_text)
 
 if __name__ == "__main__":

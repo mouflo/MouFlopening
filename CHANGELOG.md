@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0] - 2026-10-05
+
+### Ajouté
+- Titre original retrouvé sur Internet (TheMovieDB) quand Emby ne connaît pas le titre : cas des dossiers vides créés par Radarr pour un film pas encore téléchargé. On cherche avec le titre du dossier et l'année ; le thème peut ainsi être préparé « en prévision ». Emby reste consulté en premier
+- Même repli dans le téléchargement automatique : si rien n'est trouvé sous le titre du dossier, le titre original est essayé
+- Bouton « 🔑 Clé TMDB » (saisie et test de la clé depuis la page). Sans clé enregistrée ici, la clé de MouFloster est reprise automatiquement (lue sur le serveur, jamais copiée ni affichée)
+
 ## [0.8.1] - 2026-10-05
 
 ### Amélioré
