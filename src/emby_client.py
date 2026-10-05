@@ -49,10 +49,10 @@ class EmbyClient:
             raise EmbyError(f"Emby a répondu {resp.status_code}")
         return resp
 
-    def _find_series(self, folder_name: str, titles: List[str]):
+    def _find_series(self, folder_name: str, titles: List[str], item_type: str = "Series"):
         for term in dict.fromkeys(t for t in [re.sub(r"\(\d{4}\)\s*$", "", folder_name).strip(), *titles] if t):
             data = self._request("GET", "/Items", params={
-                "Recursive": "true", "IncludeItemTypes": "Series", "SearchTerm": term,
+                "Recursive": "true", "IncludeItemTypes": item_type, "SearchTerm": term,
                 "Fields": "Path", "Limit": 30}).json()
             for item in data.get("Items", []) if isinstance(data, dict) else []:
                 if folder_name in re.split(r"[\\/]", item.get("Path") or ""):
@@ -67,7 +67,7 @@ class EmbyClient:
             "Recursive": "false", "ImageRefreshMode": mode, "MetadataRefreshMode": mode,
             "ReplaceAllImages": "false", "ReplaceAllMetadata": "false"})
 
-    def refresh_series(self, folder_name: str, title: str = "", season: Optional[int] = None) -> Dict[str, Any]:
+    def refresh_series(self, folder_name: str, title: str = "", season: Optional[int] = None, kind: str = "series") -> Dict[str, Any]:
         """
         Actualise la série dont le dossier s'appelle folder_name (et la saison `season` si indiquée).
         Ne lève jamais d'exception : retourne {"ok": bool, "message": str}.
@@ -75,7 +75,7 @@ class EmbyClient:
         if not self.configured:
             return {"ok": False, "message": "Emby non configuré (clé API manquante)"}
         try:
-            item = self._find_series(folder_name, [title])
+            item = self._find_series(folder_name, [title], "Movie" if kind == "movie" else "Series")
             if not item:
                 return {"ok": False, "message": f"« {folder_name} » introuvable dans Emby (pas encore scanné ?). Thème copié quand même."}
             name = item.get("Name") or folder_name

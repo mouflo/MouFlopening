@@ -142,3 +142,51 @@ def resolve_target(roots: List[str], item_id: str) -> Tuple[Optional[Path], Opti
     if number is None or not season.is_dir():
         return none
     return season, series, number
+
+
+# ---------------------------------------------------------------------------
+# Catégories (onglets) : Anime, Séries, Films…
+# ---------------------------------------------------------------------------
+KINDS = ("anime", "series", "movie")
+_KIND_WORDS = (("anime", ("manga", "anime", "animé", "anim", "cartoon", "dessin")),
+               ("movie", ("film", "movie", "cinema", "cinéma")))
+
+
+def guess_kind(name: str) -> str:
+    """Type de médiathèque d'après le nom du dossier : Manga/Anime -> anime, Films -> movie, sinon séries."""
+    low = name.lower()
+    for kind, words in _KIND_WORDS:
+        if any(w in low for w in words):
+            return kind
+    return "series"
+
+
+def discover_categories(cfg: dict) -> List[dict]:
+    """
+    Liste des onglets : [{"name", "path", "kind", "ok"}].
+    Sources : `library.categories` (nom, chemin, type) puis chaque sous-dossier de `library.auto_parent`
+    (le type est deviné d'après le nom), puis l'ancien réglage `library.paths`.
+    """
+    lib = (cfg or {}).get("library", {})
+    cats, seen = [], set()
+
+    def add(name, path, kind=None):
+        key = str(Path(path).resolve()) if path else ""
+        if not path or key in seen:
+            return
+        seen.add(key)
+        k = kind if kind in KINDS else guess_kind(name)
+        cats.append({"name": name, "path": str(path), "kind": k, "ok": Path(path).is_dir()})
+
+    for c in lib.get("categories", []) or []:
+        if isinstance(c, dict) and c.get("path"):
+            add(c.get("name") or Path(c["path"]).name, c["path"], c.get("kind"))
+    parent = lib.get("auto_parent")
+    if parent and Path(parent).is_dir():
+        for sub in sorted(Path(parent).iterdir(), key=lambda f: f.name.lower()):
+            if sub.is_dir() and sub.name not in IGNORED_DIRS and not sub.name.startswith((".", "@", "#")):
+                add(sub.name, str(sub))
+    for path in lib.get("paths", []) or []:
+        add(Path(path).name, path)
+    cats.sort(key=lambda c: KINDS.index(c["kind"]))   # anime, séries, films (tri stable)
+    return cats

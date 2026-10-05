@@ -95,6 +95,11 @@
     .check { color:var(--muted); font-size:.9rem; display:flex; align-items:center; gap:6px; cursor:pointer; }
     .check input { width:17px; height:17px; accent-color:var(--accent); }
     .targets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+    .tabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:2px; }
+    .tab { padding:9px 18px; border-radius:6px; background:var(--card); border:1px solid var(--line); color:var(--text); cursor:pointer; font-size:.95rem; white-space:nowrap; }
+    .tab.active { border-color:var(--accent); background:#24331f; font-weight:600; }
+    .tab.bad { opacity:.5; }
+    .ytplay { width:100%; max-width:420px; aspect-ratio:16/9; border:0; border-radius:4px; background:#000; }
     .chip { padding:6px 12px; border-radius:16px; background:var(--field); border:1px solid transparent; color:var(--text); cursor:pointer; font-size:.85rem; }
     .chip:hover { background:#383838; }
     .chip.active { border-color:var(--accent); background:#24331f; }
@@ -135,11 +140,13 @@
         <p>Thèmes musicaux pour ta médiathèque Emby · chaque thème est normalisé à {{ target_db }} dB</p>
     </div>
 
+    <div class="tabs" id="tabs"></div>
+
     <div class="toolbar">
-        <div class="stat"><b id="nTotal">–</b>séries</div>
+        <div class="stat"><b id="nTotal">–</b><span id="lblItems">séries</span></div>
         <div class="stat"><b id="nWith">–</b>avec thème</div>
         <div class="stat"><b id="nWithout">–</b>sans thème</div>
-        <div class="stat"><b id="nSeasons">–</b>saisons sans thème</div>
+        <div class="stat" id="statSeasons"><b id="nSeasons">–</b>saisons sans thème</div>
         <label class="check"><input type="checkbox" id="batchSeasons" checked> avec les saisons</label>
         <button class="btn" id="batchStart">⚡ Télécharger tous les thèmes manquants</button>
         <button class="btn ghost" id="normStart">🔊 Normaliser les thèmes existants</button>
@@ -186,7 +193,11 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let items = [], selected = null, emby = false, listCollapsed = false;
+let items = [], cats = [], curCat = 0, selected = null, emby = false, listCollapsed = false;
+try { curCat = parseInt(localStorage.getItem('mf_cat') || '0') || 0; } catch (e) {}
+const catKind = () => (cats[curCat] || {}).kind || 'anime';
+const sourceName = () => catKind() === 'anime' ? 'AnimeThemes' : 'YouTube';
+const catItems = () => items.filter(i => i.cat === curCat);
 
 async function api(url, opts) {
     const res = await fetch(url, opts);
@@ -204,12 +215,19 @@ async function loadLibrary(keepSelection) {
     const data = await api('/api/library');
     items = data.items || [];
     emby = data.emby;
-    if ((data.roots_ok || []).some(ok => !ok)) note($('globalNote'), 'Un dossier de médiathèque est introuvable : partage réseau non monté ? (détails : bouton Journal)', 'warn');
+    cats = data.categories || [];
+    if (curCat >= cats.length) curCat = 0;
+    renderTabs();
+    if (!cats.length) note($('globalNote'), 'Aucune médiathèque trouvée : vérifie « library » dans config.json (bouton Journal pour le détail).', 'warn');
+    else if (cats.some(c => !c.ok)) note($('globalNote'), 'Un dossier de médiathèque est introuvable : partage réseau non monté ? (détails : bouton Journal)', 'warn');
     else if (!emby) note($('globalNote'), 'Emby n\'est pas encore configuré (clé API manquante) : les thèmes sont enregistrés, mais Emby ne sera pas prévenu.', 'warn');
     else note($('globalNote'), '');
-    const w = items.filter(i => i.has_theme).length;
-    $('nTotal').textContent = items.length; $('nWith').textContent = w; $('nWithout').textContent = items.length - w;
-    $('nSeasons').textContent = items.reduce((n, i) => n + (i.seasons || []).filter(x => !x.has_theme && x.number > 0).length, 0);
+    const mine = catItems(), movie = catKind() === 'movie';
+    const w = mine.filter(i => i.has_theme).length;
+    $('lblItems').textContent = movie ? 'films' : 'séries';
+    $('statSeasons').style.display = movie ? 'none' : ''; $('batchSeasons').parentElement.style.display = movie ? 'none' : '';
+    $('nTotal').textContent = mine.length; $('nWith').textContent = w; $('nWithout').textContent = mine.length - w;
+    $('nSeasons').textContent = mine.reduce((n, i) => n + (i.seasons || []).filter(x => !x.has_theme && x.number > 0).length, 0);
     renderList();
     if (keepSelection && selected) {
         const cur = items.find(i => i.id === selected.id);
@@ -217,17 +235,31 @@ async function loadLibrary(keepSelection) {
     }
 }
 
+function renderTabs() {
+    $('tabs').style.display = cats.length > 1 ? '' : 'none';
+    $('tabs').innerHTML = cats.map(c => `<button type="button" class="tab${c.index === curCat ? ' active' : ''}${c.ok ? '' : ' bad'}" data-i="${c.index}">${c.kind === 'movie' ? '🎬' : c.kind === 'anime' ? '🎌' : '📺'} ${esc(c.name)}</button>`).join('');
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchCat(parseInt(t.dataset.i))));
+}
+function switchCat(i) {
+    if (i === curCat) return;
+    curCat = i; try { localStorage.setItem('mf_cat', String(i)); } catch (e) {}
+    selected = null; target = null; listCollapsed = false;
+    $('detail').innerHTML = '<div class="empty">Choisis un titre dans la liste.</div>';
+    $('filterText').value = '';
+    loadLibrary();
+}
+
 function renderList() {
     const q = $('filterText').value.trim().toLowerCase(), st = $('filterState').value;
     const keep = i => st === 'all' ? true : st === 'done' ? i.has_theme : st === 'seasons' ? (i.seasons || []).some(x => !x.has_theme && x.number > 0) : !i.has_theme;
-    const rows = items.filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
+    const rows = catItems().filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
     $('list').classList.toggle('collapsed', listCollapsed && !!selected && rows.some(i => i.id === selected.id));
     $('list').innerHTML = rows.length ? rows.map(i =>
         `<div class="row${selected && selected.id === i.id ? ' active' : ''}" data-id="${esc(i.id)}">
             <div class="name">${esc(i.title || i.name)}</div>
             ${(i.seasons || []).length ? `<span class="pill">${i.seasons.filter(x => x.has_theme).length}/${i.seasons.length} saisons</span>` : ''}
             <span class="pill${i.has_theme ? ' ok' : ''}">${i.has_theme ? '🎵 thème' : 'sans thème'}</span></div>`).join('')
-        : '<div class="empty">Aucune série.</div>';
+        : '<div class="empty">Aucun titre dans cette médiathèque.</div>';
     document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => {
         if (listCollapsed && selected && r.dataset.id === selected.id) { listCollapsed = false; renderList(); }   // clic sur la série choisie : on rouvre la liste
         else select(r.dataset.id);
@@ -237,7 +269,7 @@ function renderList() {
 // ---------- détail ----------
 let target = null;   // ce qu'on traite : la série elle-même ou l'une de ses saisons
 function targetsOf(item) {
-    return [{id: item.id, label: 'Série', number: null, has_theme: item.has_theme}].concat((item.seasons || []).map(x =>
+    return [{id: item.id, label: catKind() === 'movie' ? 'Film' : 'Série', number: null, has_theme: item.has_theme}].concat((item.seasons || []).map(x =>
         ({id: x.id, label: x.number === 0 ? 'Spéciaux (S0)' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme})));
 }
 function defaultQuery() {
@@ -297,23 +329,26 @@ function refreshCurrent() {
 
 async function search() {
     const title = $('q').value.trim(); if (!title) return;
-    $('cands').innerHTML = '<div class="empty">Recherche sur AnimeThemes…</div>'; note($('msg'), '');
-    const data = await post('/api/search', {title});
+    $('cands').innerHTML = `<div class="empty">Recherche sur ${sourceName()}…</div>`; note($('msg'), '');
+    const data = await post('/api/search', {title, cat: curCat});
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
     $('cands').className = 'cands';
     $('cands').innerHTML = res.map((a, ai) => `
-        <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
+        <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.channel ? a.channel + ' · ' : '')}${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
         ${a.themes.map((t, ti) => `
             <div class="theme"><span class="slug">${esc(t.slug)}</span>
-            <audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>
+            ${t.youtube ? `<button class="btn ghost small ytbtn" data-yt="${esc(t.youtube)}">▶ Écouter</button>` : `<audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>`}
             <button class="btn small" data-a="${ai}" data-t="${ti}">Utiliser</button></div>`).join('')}
         </div>`).join('');
+    document.querySelectorAll('#cands .ytbtn').forEach(b => b.addEventListener('click', () => {
+        b.outerHTML = `<iframe class="ytplay" src="https://www.youtube.com/embed/${encodeURIComponent(b.dataset.yt)}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+    }));
     document.querySelectorAll('#cands button[data-a]').forEach(b => b.addEventListener('click', async () => {
         const t = res[b.dataset.a].themes[b.dataset.t];
         b.disabled = true; b.textContent = '…';
-        const r = await post('/api/save', {id: target.id, url: t.audio || t.video, title: selected.title});
+        const r = await post('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title});
         b.disabled = false; b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
         if (!r.error) {
@@ -350,9 +385,9 @@ async function pollBatch() {
     else if (pollTimer) { pollTimer = null; loadLibrary(true); }
 }
 $('batchStart').addEventListener('click', async () => {
-    const withSeasons = $('batchSeasons').checked;
-    if (!confirm('Chercher et télécharger automatiquement les thèmes manquants (' + (withSeasons ? 'séries et saisons' : 'séries seulement') + ') ?')) return;
-    const r = await post('/api/batch/start', {seasons: withSeasons}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+    const withSeasons = $('batchSeasons').checked && catKind() !== 'movie';
+    if (!confirm('Chercher et télécharger automatiquement les thèmes manquants de « ' + ((cats[curCat] || {}).name || '') + ' » sur ' + sourceName() + ' (' + (withSeasons ? 'séries et saisons' : catKind() === 'movie' ? 'films' : 'séries seulement') + ') ?' + (catKind() === 'anime' ? '' : '\n\nSur YouTube le choix automatique est moins fiable que pour les animes : tu pourras corriger à la main ensuite.'))) return;
+    const r = await post('/api/batch/start', {seasons: withSeasons, cat: curCat}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
 });
 $('normStart').addEventListener('click', async () => {
     if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier data/themes-backup sur le serveur). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;

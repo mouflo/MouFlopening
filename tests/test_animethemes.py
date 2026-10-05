@@ -137,3 +137,34 @@ class TestFindTheme(unittest.TestCase):
             self.assertEqual(find_theme(d).name, "naruto-theme.mp3")
             (d / "theme.ogg").write_bytes(b"x")
             self.assertEqual(find_theme(d).name, "theme.ogg")
+
+
+class TestCategories(unittest.TestCase):
+    def test_guess_kind(self):
+        from src.library import guess_kind
+        self.assertEqual(guess_kind("Manga"), "anime")
+        self.assertEqual(guess_kind("Films"), "movie")
+        self.assertEqual(guess_kind("Séries TV"), "series")
+
+    def test_discover(self):
+        import tempfile
+        from pathlib import Path
+        from src.library import discover_categories
+        with tempfile.TemporaryDirectory() as t:
+            for n in ("Films", "Manga", "Séries", "@eaDir"):
+                (Path(t) / n).mkdir()
+            cats = discover_categories({"library": {"auto_parent": t}})
+            self.assertEqual([c["kind"] for c in cats], ["anime", "series", "movie"])
+            self.assertEqual(len(discover_categories({"library": {"auto_parent": t, "categories": [{"name": "X", "path": str(Path(t) / "Films"), "kind": "series"}]}})), 3)
+
+
+class TestYouTube(unittest.TestCase):
+    def test_url_and_ranking(self):
+        from src.sources.youtube import YouTubeSource
+        y = YouTubeSource({})
+        self.assertTrue(y.is_allowed_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        self.assertFalse(y.is_allowed_url("https://evil.com/watch?v=dQw4w9WgXcQ"))
+        self.assertFalse(y.is_allowed_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=x"))
+        good = {"title": "Breaking Bad Main Theme", "duration": 60}
+        bad = {"title": "Breaking Bad reaction cover", "duration": 900}
+        self.assertGreater(y._score("Breaking Bad", good), y._score("Breaking Bad", bad))

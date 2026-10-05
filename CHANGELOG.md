@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0] - 2026-10-05
+
+### Ajouté
+- **Onglets par médiathèque** (Anime, Séries, Films…) : chaque sous-dossier de `/mnt/mouflosyno/Emby-Media` devient un onglet, le type est deviné d'après le nom (Manga/Anime → anime, Films → films, le reste → séries). Réglable dans `config.json` (`library.auto_parent`, `library.categories` avec `name`, `path`, `kind`)
+- **Source YouTube** (yt-dlp) pour les séries et les films : résultats classés, écoute dans la page, téléchargement de l'audio converti en MP3 normalisé à 89 dB. AnimeThemes reste la source des animes
+- **Films** : un dossier par film, un `theme.mp3` dedans ; actualisation Emby ciblée du film
+- Le lot automatique et les compteurs s'appliquent à l'onglet affiché ; l'onglet choisi est mémorisé
+
 ## [0.4.0] - 2026-10-05
 
 ### Ajouté

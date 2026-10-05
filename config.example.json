@@ -19,9 +19,10 @@
       ]
     },
     "youtube": {
-      "enabled": false,
+      "enabled": true,
       "priority": 2,
-      "timeout": 60
+      "timeout": 60,
+      "max_duration": 600
     },
     "local": {
       "enabled": false,
@@ -64,9 +65,8 @@
     "scan_missing_interval_hours": 12
   },
   "library": {
-    "paths": [
-      "/mnt/mouflosyno/Emby-Media/Manga"
-    ]
+    "auto_parent": "/mnt/mouflosyno/Emby-Media",
+    "categories": []
   },
   "audio": {
     "target_db": 89

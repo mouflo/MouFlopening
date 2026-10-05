@@ -30,6 +30,7 @@ from src import library
 from src.emby_client import EmbyClient
 from src.library import THEME_DIR, THEME_EXTS, THEME_FILENAME, find_theme
 from src.sources.animethemes import AnimeThemesSource
+from src.sources.youtube import YouTubeSource
 
 BASE_VERSION = "0.2"
 
@@ -45,11 +46,28 @@ def get_version():
 
 APP_VERSION = get_version()
 CONFIG = load_config()
-ROOTS = CONFIG.get("library", {}).get("paths", [])
+CATS = library.discover_categories(CONFIG)      # onglets : Anime, Séries, Films…
+ROOTS = [c["path"] for c in CATS]
 EMBY = EmbyClient(CONFIG.get("emby", {}))
 TARGET_DB = float(CONFIG.get("audio", {}).get("target_db", 89))   # niveau de chaque thème (référence ReplayGain / MP3Gain)
 SOURCE = AnimeThemesSource(CONFIG.get("sources", {}).get("animethemes", {"enabled": True}),
                            threshold=CONFIG.get("matching", {}).get("threshold", 70), target_db=TARGET_DB)
+
+YOUTUBE = YouTubeSource(CONFIG.get("sources", {}).get("youtube", {}), target_db=TARGET_DB)
+
+
+def source_for(kind):
+    """AnimeThemes pour les animes, YouTube pour les séries et les films."""
+    return SOURCE if kind == "anime" else YOUTUBE
+
+
+def kind_of(item_id):
+    """Type (anime / series / movie) de l'onglet auquel appartient un identifiant « n/Dossier »."""
+    try:
+        return CATS[int(str(item_id).split("/")[0])]["kind"]
+    except (ValueError, IndexError):
+        return "anime"
+
 
 app = Flask(__name__)
 
@@ -116,10 +134,12 @@ def _batch_state_text():
             f"(ajoutés {b['done']}, introuvables {b['failed']}) · en cours : {b['current'] or '-'}")
 
 
-def _run_batch(limit, with_seasons):
-    todo = [("série", title, folder, folder, None) for title, folder in library.missing_themes(ROOTS)]
-    if with_seasons:
-        todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(ROOTS)]
+def _run_batch(limit, with_seasons, cat=0):
+    kind = CATS[cat]["kind"]
+    roots = [CATS[cat]["path"]]
+    todo = [("série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
+    if with_seasons and kind != "movie":
+        todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
     if limit:
         todo = todo[:limit]
     with _batch_lock:
@@ -133,7 +153,7 @@ def _run_batch(limit, with_seasons):
             label = title if number is None else f"{title} — saison {number}"
             with _batch_lock:
                 BATCH["current"] = label
-            ok, msg = _auto_one(folder, title, series, number)
+            ok, msg = _auto_one(folder, title, series, number, kind=kind)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
@@ -145,18 +165,19 @@ def _run_batch(limit, with_seasons):
             BATCH.update(running=False, current="")
 
 
-def _auto_one(folder, title, series=None, number=None, query=None):
+def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
     """Choisit automatiquement le meilleur générique, l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
     series = series or folder
     query = query or (title if number is None else library.season_query(title, number))
+    source = source_for(kind)
     with _work_lock:
-        result = SOURCE.search(query, "anime")
+        result = source.search(query, "anime" if kind == "anime" else ("movie" if kind == "movie" else "tv"))
         if not result:
-            return False, f"aucun générique trouvé sur AnimeThemes pour « {query} »"
+            return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
         _backup_existing(folder)
-        if not SOURCE.download(result.url, folder / THEME_FILENAME):
+        if not source.download(result.url, folder / THEME_FILENAME):
             return False, "téléchargement ou conversion impossible (voir le Journal)"
-    emby = EMBY.refresh_series(series.name, title, number)
+    emby = EMBY.refresh_series(series.name, title, number, kind)
     return True, f"{result.title} · {emby['message']}"
 
 def _run_normalize():
@@ -233,15 +254,22 @@ def index():
 @app.route("/api/library")
 def api_library():
     items = library.list_library(ROOTS)
-    return jsonify({"items": items, "emby": EMBY.configured, "roots_ok": [Path(r).is_dir() for r in ROOTS]})
+    for it in items:
+        it["cat"] = int(it["id"].split("/")[0])
+    cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": Path(c["path"]).is_dir()} for i, c in enumerate(CATS)]
+    return jsonify({"items": items, "emby": EMBY.configured, "categories": cats})
 
 
 @app.route("/api/search", methods=["POST"])
 def api_search():
-    title = (request.get_json(silent=True) or {}).get("title", "").strip()
+    body = request.get_json(silent=True) or {}
+    title = body.get("title", "").strip()
     if not title:
         return jsonify({"error": "Titre vide"}), 400
-    return jsonify({"results": SOURCE.candidates(title)})
+    kind = kind_of(f"{body.get('cat', 0)}/")
+    if kind == "anime":
+        return jsonify({"results": SOURCE.candidates(title), "source": "AnimeThemes"})
+    return jsonify({"results": YOUTUBE.candidates(title, "movie" if kind == "movie" else "series"), "source": "YouTube"})
 
 
 @app.route("/api/save", methods=["POST"])
@@ -251,14 +279,16 @@ def api_save():
     url = data.get("url", "")
     if not folder:
         return jsonify({"error": "Série ou saison introuvable"}), 404
-    if not SOURCE.is_allowed_url(url):
-        return jsonify({"error": "Adresse non autorisée (seul animethemes.moe est accepté)"}), 400
+    kind = kind_of(data.get("id", ""))
+    source = source_for(kind)
+    if not source.is_allowed_url(url):
+        return jsonify({"error": "Adresse non autorisée (seuls animethemes.moe et youtube.com sont acceptés)"}), 400
     with _work_lock:
         _backup_existing(folder)
-        ok = SOURCE.download(url, folder / THEME_FILENAME)
+        ok = source.download(url, folder / THEME_FILENAME)
     if not ok:
         return jsonify({"error": "Téléchargement ou conversion impossible (détails : bouton Journal)"}), 502
-    emby = EMBY.refresh_series(series.name, data.get("title", ""), number)
+    emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind)
     logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
     return jsonify({"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]})
 
@@ -271,7 +301,7 @@ def api_auto():
         return jsonify({"error": "Série ou saison introuvable"}), 404
     title = library.clean_title(series.name)
     query = (data.get("title") or "").strip() or None      # titre éventuellement corrigé à la main dans la page
-    ok, msg = _auto_one(folder, title, series, number, query)
+    ok, msg = _auto_one(folder, title, series, number, query, kind_of(data.get("id", "")))
     return jsonify({"ok": ok, "message": msg}), (200 if ok else 404)
 
 
@@ -288,11 +318,16 @@ def api_theme():
 def api_batch_start():
     body = request.get_json(silent=True) or {}
     limit, with_seasons = body.get("limit"), bool(body.get("seasons"))
+    try:
+        cat = int(body.get("cat", 0))
+        CATS[cat]
+    except (ValueError, IndexError):
+        return jsonify({"error": "Médiathèque inconnue"}), 400
     with _batch_lock:   # on marque « en cours » tout de suite : la page qui interroge juste après le voit
         if BATCH["running"]:
             return jsonify({"error": "Un lot est déjà en cours"}), 409
         BATCH.update(running=True, stop=False, total=0, done=0, failed=0, current="Préparation…", messages=[])
-    threading.Thread(target=_run_batch, args=(int(limit) if limit else None, with_seasons), daemon=True).start()
+    threading.Thread(target=_run_batch, args=(int(limit) if limit else None, with_seasons, cat), daemon=True).start()
     return jsonify({"ok": True})
 
 
