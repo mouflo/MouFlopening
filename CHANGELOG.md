@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0] - 2026-10-05
+
+### Ajouté
+- Recherche sous le titre original : une case « Chercher aussi sous le titre original (d'après Emby) », cochée par défaut, lance la recherche avec le titre du dossier ET le titre original connu d'Emby, et fusionne les résultats (les titres essayés sont indiqués au-dessus de la liste). Le choix de la case est mémorisé dans le navigateur
+
+### Supprimé
+- Le bouton « ⚡ Automatique » de la fiche d'un titre (contrôle manuel : on choisit soi-même avec « Utiliser »). Le lot automatique de tout un onglet reste disponible
+
 ## [0.6.4] - 2026-10-05
 
 ### Corrigé

@@ -53,12 +53,22 @@ class EmbyClient:
         for term in dict.fromkeys(t for t in [re.sub(r"\(\d{4}\)\s*$", "", folder_name).strip(), *titles] if t):
             data = self._request("GET", "/Items", params={
                 "Recursive": "true", "IncludeItemTypes": item_type, "SearchTerm": term,
-                "Fields": "Path", "Limit": 30}).json()
+                "Fields": "Path,OriginalTitle", "Limit": 30}).json()
             for item in data.get("Items", []) if isinstance(data, dict) else []:
                 parts = re.split(r"[\\/]", item.get("Path") or "")
                 if folder_name in parts and (not parent or parent in parts):   # parent : distingue « Films HD » de « Films 4K »
                     return item
         return None
+
+    def original_title(self, folder_name: str, title: str = "", kind: str = "series", parent: str = "") -> str:
+        """Titre original (anglais, japonais…) d'après Emby ; « » si Emby ne le connaît pas ou est injoignable."""
+        if not self.configured:
+            return ""
+        try:
+            item = self._find_series(folder_name, [title], "Movie" if kind == "movie" else "Series", parent)
+        except Exception:
+            return ""
+        return ((item or {}).get("OriginalTitle") or "").strip()
 
     def _refresh_item(self, item_id: str) -> None:
         mode = os.getenv("EMBY_REFRESH_MODE", "ValidationOnly")

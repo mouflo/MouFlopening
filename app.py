@@ -331,9 +331,38 @@ def api_search():
         kind = CATS[int(body.get("cat", 0))]["kind"]
     except (ValueError, IndexError):
         kind = "anime"
-    if kind == "anime":
-        return jsonify({"results": SOURCE.candidates(title), "source": "AnimeThemes"})
-    return jsonify({"results": YOUTUBE.candidates(title, "movie" if kind == "movie" else "series"), "source": "YouTube"})
+
+    titles = [title]
+    if body.get("original"):
+        # titre original d'après Emby (le titre français ne donne pas toujours de résultat)
+        folder, series, _ = library.resolve_target(ROOTS, body.get("id", ""))
+        if series:
+            orig = EMBY.original_title(series.name, title, kind, series.parent.name)
+            if orig and orig.casefold() not in (t.casefold() for t in titles):
+                titles.append(orig)
+
+    def run(t):
+        if kind == "anime":
+            return SOURCE.candidates(t)
+        return YOUTUBE.candidates(t, "movie" if kind == "movie" else "series")
+
+    results, seen = [], set()
+    for t in titles:
+        try:
+            found = run(t)
+        except Exception:
+            if len(titles) == 1:
+                raise
+            logger.exception("Recherche impossible pour « %s »", t)
+            continue
+        for r in found:
+            key = (r.get("themes") or [{}])[0].get("youtube") if kind != "anime" else r.get("name")
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(r)
+    results.sort(key=lambda r: -int(r.get("score") or 0))
+    return jsonify({"results": results[:8], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles})
 
 
 @app.route("/api/save", methods=["POST"])

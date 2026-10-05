@@ -100,6 +100,8 @@
     .batchlog { margin-bottom:16px; padding:10px 14px; }
     .batchlog summary { cursor:pointer; color:var(--muted); font-size:.9rem; }
     .batchlog pre { margin:10px 0 0; white-space:pre-wrap; word-break:break-word; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; color:#d6d6d6; max-height:40vh; overflow:auto; }
+        .opt { display:flex; align-items:center; gap:8px; margin:8px 0 0; font-size:.9em; color:var(--muted,#aaa); cursor:pointer; }
+        .opt input { width:auto; margin:0; }
 </style>
 </head>
 <body>
@@ -226,6 +228,9 @@ function targetsOf(item) {
     return [{id: item.id, label: catKind() === 'movie' ? 'Film' : 'Série', number: null, has_theme: item.has_theme}].concat((item.seasons || []).map(x =>
         ({id: x.id, label: x.number === 0 ? 'Spéciaux (S0)' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme})));
 }
+let origOn = true;
+try { origOn = localStorage.getItem('mf_orig') !== '0'; } catch (x) {}
+
 function defaultQuery() {
     const base = selected.title || selected.name;
     return target && target.number > 1 ? base + ' Season ' + target.number : base;
@@ -249,13 +254,13 @@ function renderDetail() {
         <div class="search-row">
             <input type="text" id="q" value="${esc(defaultQuery())}" autocomplete="off">
             <button class="btn" id="btnSearch">🔍 Chercher</button>
-            <button class="btn ghost" id="btnAuto">⚡ Automatique</button>
         </div>
+        <label class="opt"><input type="checkbox" id="optOrig" ${origOn ? 'checked' : ''}> Chercher aussi sous le titre original (d'après Emby)</label>
         <div id="msg"></div>
         <div id="cands"></div>`;
     renderTargets(); refreshCurrent();
     $('btnSearch').addEventListener('click', search);
-    $('btnAuto').addEventListener('click', auto);
+    $('optOrig').addEventListener('change', e => { origOn = e.target.checked; try { localStorage.setItem('mf_orig', origOn ? '1' : '0'); } catch (x) {} });
     $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
     if (!target.has_theme) search();
 }
@@ -284,11 +289,12 @@ function refreshCurrent() {
 async function search() {
     const title = $('q').value.trim(); if (!title) return;
     $('cands').innerHTML = `<div class="empty">Recherche sur ${sourceName()}…</div>`; note($('msg'), '');
-    const data = await post('/api/search', {title, cat: curCat});
+    const data = await post('/api/search', {title, cat: curCat, id: target.id, original: origOn});
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
     $('cands').className = 'cands';
+    if ((data.queries || []).length > 1) note($('msg'), 'Recherché sous : ' + data.queries.join(' · '), 'ok');
     $('cands').innerHTML = res.map((a, ai) => `
         <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.channel ? a.channel + ' · ' : '')}${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
         ${a.themes.map((t, ti) => `
@@ -314,14 +320,6 @@ async function search() {
     document.querySelectorAll('.cand').forEach(c => c.addEventListener('click', e => {
         if ($('cands').classList.contains('collapsed') && c.classList.contains('chosen') && !e.target.closest('audio,button')) $('cands').classList.remove('collapsed');
     }));
-}
-
-async function auto() {
-    const b = $('btnAuto'); b.disabled = true; note($('msg'), '');
-    const r = await post('/api/auto', {id: target.id, title: $('q').value.trim()});
-    b.disabled = false;
-    note($('msg'), r.message || r.error, r.ok ? 'ok' : 'warn');
-    if (r.ok) loadLibrary(true);
 }
 
 // ---------- lot automatique ----------
