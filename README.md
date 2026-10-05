@@ -57,4 +57,4 @@ python mouflopening.py --batch titles.txt
 
 ## License
 
-This project is licensed under the MIT License - see LICENSE file for details.
+Ce projet est sous licence MIT (voir le fichier `LICENSE`) : tu peux le réutiliser, le modifier et le partager librement.
