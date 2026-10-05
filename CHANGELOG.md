@@ -3,6 +3,8 @@
 ## [0.2.0] - 2026-10-05
 
 ### Ajouté
+- **Interface web** (port 8001) : connexion par formulaire, thème sombre Emby, choix manuel avec écoute, mode automatique, lot avec barre de progression, fenêtre Journal copiable, numéro de version affiché
+- Identifiant et clé Emby repris automatiquement de MouFloster au déploiement
 - Source AnimeThemes fonctionnelle : recherche (titres alternatifs inclus), choix du générique (OP1 puis ED1), téléchargement et conversion en MP3 via ffmpeg
 - Analyse de la médiathèque (`--scan-missing`, avec `--dry-run` et `--limit`) : enregistre `theme.mp3` dans le dossier de chaque série qui n'en a pas
 - Actualisation ciblée d'Emby (uniquement la série modifiée) après chaque téléchargement

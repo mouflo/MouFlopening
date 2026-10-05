@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>MouFlopening</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+    :root { --bg:#101010; --card:#1c1c1c; --field:#2a2a2a; --line:#3a3a3a; --text:#fff; --muted:#a0a0a0;
+            --accent:#52b54b; --accent-hover:#63c75c; --err:#e5534b; --warn:#e5a84b; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { background:var(--bg); color:var(--text); font-family:"Noto Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; padding:16px; }
+    .container { max-width:1200px; margin:0 auto; }
+    .header { background:var(--card); border-radius:8px; padding:20px 24px; margin-bottom:16px; position:relative; }
+    .header h1 { margin:0; font-size:1.5rem; font-weight:600; }
+    .header h1 span { color:var(--accent); }
+    .header p { margin:4px 0 0; color:var(--muted); font-size:.9rem; }
+    .top-actions { position:absolute; top:14px; right:16px; display:flex; gap:8px; align-items:center; }
+    .version { color:#666; font-size:.75rem; margin-right:6px; }
+    button, select, input[type=text] { font:inherit; }
+    .btn { padding:9px 16px; border:0; border-radius:4px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+    .btn:hover { background:var(--accent-hover); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .btn.ghost { background:var(--field); color:var(--text); font-weight:500; }
+    .btn.ghost:hover { background:#383838; }
+    .btn.small { padding:6px 12px; font-size:.85rem; }
+    .btn.danger { background:var(--err); }
+    .panel { background:var(--card); border-radius:8px; padding:16px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:16px; }
+    .stat { background:var(--card); border-radius:8px; padding:10px 16px; font-size:.9rem; color:var(--muted); }
+    .stat b { color:var(--text); font-size:1.1rem; margin-right:4px; }
+    .progress { flex:1; min-width:220px; background:var(--field); border-radius:6px; height:34px; position:relative; overflow:hidden; display:none; }
+    .progress.show { display:block; }
+    .progress .bar { background:var(--accent); height:100%; width:0; transition:width .4s; }
+    .progress .txt { position:absolute; inset:0; display:flex; align-items:center; padding:0 12px; font-size:.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .layout { display:grid; grid-template-columns:minmax(260px,380px) 1fr; gap:16px; align-items:start; }
+    @media (max-width:800px) { .layout { grid-template-columns:1fr; } body { padding:8px; } .top-actions { position:static; margin-top:10px; } }
+    .filters { display:flex; gap:8px; margin-bottom:10px; }
+    .filters input, .filters select, .search-row input { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:9px 10px; outline:none; }
+    .filters input { flex:1; min-width:0; }
+    .filters input:focus, .search-row input:focus { border-color:var(--accent); }
+    .list { max-height:70vh; overflow-y:auto; }
+    .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:4px; cursor:pointer; border:1px solid transparent; }
+    .row:hover { background:var(--field); }
+    .row.active { background:#24331f; border-color:var(--accent); }
+    .row .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pill { font-size:.72rem; padding:2px 8px; border-radius:10px; background:var(--field); color:var(--muted); white-space:nowrap; }
+    .pill.ok { background:rgba(82,181,75,.18); color:#9bdc95; }
+    .empty { color:var(--muted); padding:30px 10px; text-align:center; }
+    .detail h2 { margin:0 0 4px; font-size:1.2rem; }
+    .detail .path { color:var(--muted); font-size:.8rem; margin-bottom:14px; word-break:break-all; }
+    .search-row { display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
+    .search-row input { flex:1; min-width:180px; }
+    .current { background:var(--field); border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:.9rem; }
+    .current audio { width:100%; margin-top:6px; }
+    .cand { background:var(--field); border-radius:6px; padding:12px; margin-bottom:12px; }
+    .cand h4 { margin:0 0 8px; font-size:1rem; font-weight:600; }
+    .cand h4 small { color:var(--muted); font-weight:400; margin-left:6px; }
+    .theme { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+    .theme .slug { width:48px; font-weight:600; color:var(--accent); }
+    .theme audio { flex:1; min-width:180px; height:36px; }
+    .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0; }
+    .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
+    .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
+    .note.warn { background:rgba(229,168,75,.15); border:1px solid var(--warn); color:#f3d9a8; }
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:50; }
+    .modal.show { display:flex; }
+    .modal-box { background:var(--card); border-radius:8px; width:100%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; padding:18px; }
+    .modal-box h3 { margin:0 0 4px; }
+    .modal-sub { color:var(--muted); font-size:.85rem; margin-bottom:10px; }
+    .modal-box textarea { flex:1; min-height:300px; background:#0c0c0c; color:#d6d6d6; border:1px solid var(--line); border-radius:4px; padding:10px; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; resize:none; }
+    .modal-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:5px; } ::-webkit-scrollbar-track { background:transparent; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="top-actions">
+            <span class="version">{{ version }}</span>
+            <button type="button" class="btn ghost small" id="logOpen">🩺 Journal</button>
+            <form method="post" action="/logout" style="margin:0"><button type="submit" class="btn ghost small">Se déconnecter</button></form>
+        </div>
+        <h1>🎵 Mou<span>Flopening</span></h1>
+        <p>Thèmes musicaux pour ta médiathèque Emby</p>
+    </div>
+
+    <div class="toolbar">
+        <div class="stat"><b id="nTotal">–</b>séries</div>
+        <div class="stat"><b id="nWith">–</b>avec thème</div>
+        <div class="stat"><b id="nWithout">–</b>sans thème</div>
+        <button class="btn" id="batchStart">⚡ Télécharger tous les thèmes manquants</button>
+        <button class="btn danger" id="batchStop" style="display:none">■ Arrêter</button>
+        <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
+    </div>
+    <div id="globalNote"></div>
+
+    <div class="layout">
+        <div class="panel">
+            <div class="filters">
+                <input type="text" id="filterText" placeholder="Filtrer…" autocomplete="off">
+                <select id="filterState">
+                    <option value="missing">Sans thème</option>
+                    <option value="all">Toutes</option>
+                    <option value="done">Avec thème</option>
+                </select>
+            </div>
+            <div class="list" id="list"><div class="empty">Chargement…</div></div>
+        </div>
+
+        <div class="panel detail" id="detail">
+            <div class="empty">Choisis une série dans la liste.</div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="logModal">
+    <div class="modal-box">
+        <h3>🩺 Journal et diagnostic</h3>
+        <div class="modal-sub">État du serveur, réglages et dernières lignes du journal. Les clés sont masquées. Copie tout et colle-le dans la conversation.</div>
+        <textarea id="logText" readonly></textarea>
+        <div id="logStatus" class="note" style="display:none"></div>
+        <div class="modal-actions">
+            <button class="btn" id="logCopy">📋 Copier</button>
+            <button class="btn ghost" id="logRefresh">↻ Rafraîchir</button>
+            <button class="btn ghost" id="logClose">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let items = [], selected = null, emby = false;
+
+async function api(url, opts) {
+    const res = await fetch(url, opts);
+    if (res.status === 401) { window.location.href = '/login'; throw new Error('Session expirée'); }
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok && !data.error) data.error = 'Erreur ' + res.status;
+    return data;
+}
+const post = (url, body) => api(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+function note(el, text, kind) { el.innerHTML = text ? `<div class="note ${kind || 'ok'}">${esc(text)}</div>` : ''; }
+
+// ---------- liste ----------
+async function loadLibrary(keepSelection) {
+    const data = await api('/api/library');
+    items = data.items || [];
+    emby = data.emby;
+    if ((data.roots_ok || []).some(ok => !ok)) note($('globalNote'), 'Un dossier de médiathèque est introuvable : partage réseau non monté ? (détails : bouton Journal)', 'warn');
+    else if (!emby) note($('globalNote'), 'Emby n\'est pas encore configuré (clé API manquante) : les thèmes sont enregistrés, mais Emby ne sera pas prévenu.', 'warn');
+    else note($('globalNote'), '');
+    const w = items.filter(i => i.has_theme).length;
+    $('nTotal').textContent = items.length; $('nWith').textContent = w; $('nWithout').textContent = items.length - w;
+    renderList();
+    if (keepSelection && selected) { const cur = items.find(i => i.id === selected.id); if (cur) { selected = cur; refreshCurrent(); } }
+}
+
+function renderList() {
+    const q = $('filterText').value.trim().toLowerCase(), st = $('filterState').value;
+    const rows = items.filter(i => (st === 'all' || (st === 'done') === i.has_theme) && (!q || i.name.toLowerCase().includes(q)));
+    $('list').innerHTML = rows.length ? rows.map(i =>
+        `<div class="row${selected && selected.id === i.id ? ' active' : ''}" data-id="${esc(i.id)}">
+            <div class="name">${esc(i.title || i.name)}</div>
+            <span class="pill${i.has_theme ? ' ok' : ''}">${i.has_theme ? '🎵 thème' : 'sans thème'}</span></div>`).join('')
+        : '<div class="empty">Aucune série.</div>';
+    document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => select(r.dataset.id)));
+}
+
+// ---------- détail ----------
+function select(id) {
+    selected = items.find(i => i.id === id); if (!selected) return;
+    renderList();
+    $('detail').innerHTML = `
+        <h2>${esc(selected.title || selected.name)}</h2>
+        <div class="path">${esc(selected.name)}</div>
+        <div id="current"></div>
+        <div class="search-row">
+            <input type="text" id="q" value="${esc(selected.title || selected.name)}" autocomplete="off">
+            <button class="btn" id="btnSearch">🔍 Chercher</button>
+            <button class="btn ghost" id="btnAuto">⚡ Automatique</button>
+        </div>
+        <div id="msg"></div>
+        <div id="cands"></div>`;
+    refreshCurrent();
+    $('btnSearch').addEventListener('click', search);
+    $('btnAuto').addEventListener('click', auto);
+    $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+    if (!selected.has_theme) search();
+}
+
+function refreshCurrent() {
+    if (!selected || !$('current')) return;
+    $('current').innerHTML = selected.has_theme
+        ? `<div class="current">Thème actuel<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(selected.id)}&t=${Date.now()}"></audio></div>` : '';
+}
+
+async function search() {
+    const title = $('q').value.trim(); if (!title) return;
+    $('cands').innerHTML = '<div class="empty">Recherche sur AnimeThemes…</div>'; note($('msg'), '');
+    const data = await post('/api/search', {title});
+    if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
+    const res = data.results || [];
+    if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
+    $('cands').innerHTML = res.map((a, ai) => `
+        <div class="cand"><h4>${esc(a.name)}<small>${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
+        ${a.themes.map((t, ti) => `
+            <div class="theme"><span class="slug">${esc(t.slug)}</span>
+            <audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>
+            <button class="btn small" data-a="${ai}" data-t="${ti}">Utiliser</button></div>`).join('')}
+        </div>`).join('');
+    document.querySelectorAll('#cands button[data-a]').forEach(b => b.addEventListener('click', async () => {
+        const t = res[b.dataset.a].themes[b.dataset.t];
+        b.disabled = true; b.textContent = '…';
+        const r = await post('/api/save', {id: selected.id, url: t.audio || t.video, title: selected.title});
+        b.disabled = false; b.textContent = 'Utiliser';
+        note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
+        if (!r.error) loadLibrary(true);
+    }));
+}
+
+async function auto() {
+    const b = $('btnAuto'); b.disabled = true; note($('msg'), '');
+    const r = await post('/api/auto', {id: selected.id, title: $('q').value.trim()});
+    b.disabled = false;
+    note($('msg'), r.message || r.error, r.ok ? 'ok' : 'warn');
+    if (r.ok) loadLibrary(true);
+}
+
+// ---------- lot automatique ----------
+let pollTimer = null;
+async function pollBatch() {
+    const s = await api('/api/batch/status');
+    const n = s.done + s.failed;
+    $('progress').classList.toggle('show', s.running || s.total > 0);
+    $('bar').style.width = (s.total ? Math.round(100 * n / s.total) : 0) + '%';
+    $('progTxt').textContent = s.running ? `${n}/${s.total} · ${s.current || ''}` : (s.total ? `Terminé : ${s.done} ajouté(s), ${s.failed} introuvable(s)` : '');
+    $('batchStart').style.display = s.running ? 'none' : ''; $('batchStop').style.display = s.running ? '' : 'none';
+    if (s.running) { clearTimeout(pollTimer); pollTimer = setTimeout(pollBatch, 2000); loadLibrary(true); }
+    else if (pollTimer) { pollTimer = null; loadLibrary(true); }
+}
+$('batchStart').addEventListener('click', async () => {
+    if (!confirm('Chercher et télécharger automatiquement le thème de toutes les séries qui n\'en ont pas ?')) return;
+    const r = await post('/api/batch/start', {}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+});
+$('batchStop').addEventListener('click', async () => { await post('/api/batch/stop'); });
+
+// ---------- journal ----------
+function logStatus(msg, kind) { const el = $('logStatus'); el.style.display = msg ? 'block' : 'none'; el.textContent = msg || ''; el.className = 'note ' + (kind || 'ok'); }
+async function loadLog() {
+    $('logText').value = 'Chargement...';
+    try { const d = await api('/api/diagnostic'); $('logText').value = d.report || d.error || '(vide)'; $('logText').scrollTop = $('logText').scrollHeight; }
+    catch (e) { $('logText').value = 'Impossible de charger le rapport : ' + e.message; }
+}
+$('logOpen').addEventListener('click', () => { logStatus(''); $('logModal').classList.add('show'); document.body.style.overflow = 'hidden'; loadLog(); });
+$('logClose').addEventListener('click', () => { $('logModal').classList.remove('show'); document.body.style.overflow = ''; });
+$('logRefresh').addEventListener('click', () => { logStatus(''); loadLog(); });
+$('logCopy').addEventListener('click', async () => {
+    const box = $('logText'); let ok = false;
+    try { await navigator.clipboard.writeText(box.value); ok = true; }
+    catch (e) { box.focus(); box.select(); try { ok = document.execCommand('copy'); } catch (e2) {} }
+    logStatus(ok ? '✅ Copié : colle-le maintenant dans la conversation.' : '⚠️ Copie automatique impossible : le texte est sélectionné, fais « Copier » à la main.', ok ? 'ok' : 'warn');
+});
+
+// erreurs JavaScript -> journal du serveur
+let clientErrors = 0;
+function reportClientError(message, where) { if (clientErrors++ >= 5) return; fetch('/api/clientlog', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: String(message), where: where || ''})}).catch(() => {}); }
+window.addEventListener('error', e => reportClientError(e.message, (e.filename || '') + ':' + (e.lineno || '')));
+window.addEventListener('unhandledrejection', e => reportClientError('Promesse rejetée : ' + (e.reason && e.reason.message || e.reason), ''));
+
+$('filterText').addEventListener('input', renderList);
+$('filterState').addEventListener('change', renderList);
+loadLibrary().then(pollBatch);
+</script>
+</body>
+</html>

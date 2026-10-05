@@ -67,6 +67,31 @@ class AnimeThemesSource(BaseSource):
             metadata={"anime": best["name"], "slug": slug, "score": score, "video_url": video_url},
         )
 
+    def candidates(self, title: str, limit: int = 6) -> List[Dict[str, Any]]:
+        """Plusieurs animes proches du titre, avec tous leurs génériques (pour choisir à l'oreille)."""
+        out = []
+        for anime in self._query_animes(title):
+            names = [anime.get("name", "")] + [s.get("text", "") for s in anime.get("animesynonyms", [])]
+            score = max((similarity(title, n) for n in names if n), default=0)
+            themes = []
+            for theme in sorted(anime.get("animethemes", []), key=lambda t: (t.get("type") != "OP", t.get("sequence") or 1)):
+                found = self._first_link(theme)
+                if found:
+                    themes.append({"slug": theme.get("slug") or theme.get("type", "?"),
+                                   "type": theme.get("type"), "audio": found[0], "video": found[1]})
+            if themes:
+                out.append({"name": anime.get("name", "?"), "year": anime.get("year"), "score": score, "themes": themes})
+        out.sort(key=lambda a: -a["score"])
+        return out[:limit]
+
+    @staticmethod
+    def is_allowed_url(url: str) -> bool:
+        """On ne télécharge que depuis animethemes.moe (empêche d'utiliser l'appli pour atteindre autre chose)."""
+        from urllib.parse import urlparse
+        u = urlparse(url or "")
+        host = (u.hostname or "").lower()
+        return u.scheme == "https" and (host == "animethemes.moe" or host.endswith(".animethemes.moe"))
+
     def _query_animes(self, title: str) -> List[Dict[str, Any]]:
         try:
             resp = self.session.get(

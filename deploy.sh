@@ -41,16 +41,38 @@ if git diff "$OLD_COMMIT" HEAD -- requirements.txt | grep -q .; then
     fi
 fi
 
-# Redémarrer le service seulement s'il est actif (l'appli est pour l'instant un outil en ligne de commande)
+# Identifiants et clé Emby : repris de MouFloster au premier déploiement (même compte, rien à retaper).
+# Seules les clés absentes sont copiées ; les valeurs ne sont jamais écrites dans le journal.
+SRC_SECRETS="/opt/moufloster/data/secrets.env"
+DST_SECRETS="$REPO_DIR/data/secrets.env"
+if [ -f "$SRC_SECRETS" ]; then
+    mkdir -p "$REPO_DIR/data"
+    touch "$DST_SECRETS"
+    chmod 600 "$DST_SECRETS"
+    for KEY in APP_USER APP_PASSWORD_HASH EMBY_API_KEY EMBY_URL; do
+        grep -q "^$KEY=" "$DST_SECRETS" && continue
+        LINE=$(grep "^$KEY=" "$SRC_SECRETS" | head -1)
+        if [ -n "$LINE" ]; then
+            printf '%s\n' "$LINE" >> "$DST_SECRETS"
+            log "🔑 $KEY repris de MouFloster"
+        fi
+    done
+fi
+
+# Service systemd : le fichier du dépôt est la source de vérité
+if ! cmp -s "$REPO_DIR/mouflopening.service" /etc/systemd/system/mouflopening.service; then
+    cp "$REPO_DIR/mouflopening.service" /etc/systemd/system/mouflopening.service
+    systemctl daemon-reload
+    systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
+    log "📋 Service systemd mis à jour"
+fi
+
+# Redémarrer l'appli web
+systemctl restart "$SERVICE_NAME"
+sleep 2
 if systemctl is-active --quiet "$SERVICE_NAME"; then
-    systemctl restart "$SERVICE_NAME"
-    sleep 2
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        log "✅ Déploiement réussi, service redémarré"
-    else
-        log "❌ Le service n'a pas pu redémarrer"
-        exit 1
-    fi
+    log "✅ Déploiement réussi, service redémarré"
 else
-    log "✅ Code mis à jour (aucun service actif à redémarrer)"
+    log "❌ Le service n'a pas pu démarrer (voir : journalctl -u $SERVICE_NAME -e)"
+    exit 1
 fi

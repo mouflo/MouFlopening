@@ -1,13 +1,13 @@
 [Unit]
-Description=MouFlopening - Themes musicaux pour Emby
+Description=MouFlopening - Themes musicaux pour Emby (interface web)
 After=network.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/mouflopening
-ExecStart=/opt/mouflopening/venv/bin/python mouflopening.py --interactive
-Restart=on-failure
+ExecStart=/opt/mouflopening/venv/bin/python app.py
+Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/mouflopening.log
 StandardError=append:/var/log/mouflopening.log

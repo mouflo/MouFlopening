@@ -5,7 +5,7 @@ sous le nom `theme.mp3` (convention reconnue automatiquement par Emby).
 
 import re
 from pathlib import Path
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Optional, Tuple
 
 THEME_FILENAME = "theme.mp3"
 
@@ -35,3 +35,30 @@ def missing_themes(roots: List[str]) -> List[Tuple[str, Path]]:
     """Séries sans theme.mp3 : liste de (titre nettoyé, dossier)."""
     return [(clean_title(f.name), f) for f in iter_series_folders(roots)
             if not (f / THEME_FILENAME).exists()]
+
+
+def list_library(roots: List[str]) -> List[dict]:
+    """Toutes les séries avec leur état. `id` = « numéro_du_dossier_racine/nom_du_dossier »."""
+    items = []
+    for i, root in enumerate(roots):
+        base = Path(root)
+        if not base.is_dir():
+            continue
+        for folder in sorted(base.iterdir(), key=lambda f: f.name.lower()):
+            if folder.is_dir() and folder.name not in IGNORED_DIRS and not folder.name.startswith("."):
+                items.append({"id": f"{i}/{folder.name}", "name": folder.name, "title": clean_title(folder.name),
+                              "has_theme": (folder / THEME_FILENAME).exists()})
+    return items
+
+
+def resolve_folder(roots: List[str], item_id: str) -> Optional[Path]:
+    """Retrouve le dossier d'une série à partir de son id, ou None si l'id est invalide (jamais hors médiathèque)."""
+    try:
+        idx, name = item_id.split("/", 1)
+        base = Path(roots[int(idx)])
+    except (ValueError, IndexError, AttributeError):
+        return None
+    if not name or "/" in name or "\\" in name or name in (".", "..") or name in IGNORED_DIRS:
+        return None
+    folder = base / name
+    return folder if folder.is_dir() else None

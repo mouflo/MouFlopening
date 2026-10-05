@@ -5,7 +5,7 @@ import tempfile, sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.sources.animethemes import AnimeThemesSource
-from src.library import clean_title, missing_themes
+from src.library import clean_title, missing_themes, resolve_folder, list_library
 
 API = {"anime": [
     {"name": "Fairy Tail", "animesynonyms": [{"text": "FT"}],
@@ -60,6 +60,27 @@ class TestLibrary(unittest.TestCase):
                 (Path(d) / name).mkdir()
             (Path(d) / "B" / "theme.mp3").write_bytes(b"x")
             self.assertEqual([t for t, _ in missing_themes([d])], ["A"])
+
+    def test_resolve_folder_refuses_escapes(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "Serie").mkdir(); (Path(d) / "@eaDir").mkdir()
+            self.assertEqual(resolve_folder([d], "0/Serie"), Path(d) / "Serie")
+            for bad in ["../x", "0/..", "0/a/b", "0/@eaDir", "5/Serie", "", "Serie"]:
+                self.assertIsNone(resolve_folder([d], bad), bad)
+
+    def test_list_library_states(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "A").mkdir(); (Path(d) / "B").mkdir(); (Path(d) / "B" / "theme.mp3").write_bytes(b"x")
+            self.assertEqual([(i["name"], i["has_theme"]) for i in list_library([d])], [("A", False), ("B", True)])
+
+
+class TestUrlSafety(unittest.TestCase):
+    def test_allowed_urls(self):
+        ok = AnimeThemesSource.is_allowed_url
+        self.assertTrue(ok("https://a.animethemes.moe/x.ogg"))
+        self.assertTrue(ok("https://animethemes.moe/x"))
+        for bad in ["http://a.animethemes.moe/x", "https://animethemes.moe.evil.com/x", "https://evil.com/animethemes.moe", "file:///etc/passwd", ""]:
+            self.assertFalse(ok(bad), bad)
 
 
 if __name__ == "__main__":

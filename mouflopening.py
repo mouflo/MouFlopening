@@ -15,6 +15,7 @@ from src.sources.base_source import BaseSource, ThemeResult
 from src.sources.animethemes import AnimeThemesSource
 from src.library import THEME_FILENAME, missing_themes
 from src.emby_client import EmbyClient
+from src.config import load_config
 
 
 class MouFlopening:
@@ -33,48 +34,12 @@ class MouFlopening:
         self._initialize_sources()
 
     def _load_config(self, config_path: str) -> Dict[str, Any]:
-        """Load configuration from JSON file"""
+        """Charge la configuration (voir src/config.py)"""
         try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-            config = self._with_defaults(config)
-            logging.info(f"Configuration loaded from {config_path}")
-            self._apply_secrets(config)
-            return config
-        except FileNotFoundError:
-            logging.error(f"Configuration file not found: {config_path}")
-            logging.info(f"Copy config.example.json to {config_path} and configure")
-            sys.exit(1)
+            return load_config(config_path)
         except json.JSONDecodeError as e:
-            logging.error(f"Invalid JSON in configuration: {e}")
+            logging.error(f"JSON invalide dans la configuration : {e}")
             sys.exit(1)
-
-    @staticmethod
-    def _with_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
-        """Complète config.json avec les valeurs de config.example.json (clés absentes seulement)."""
-        example = Path(__file__).with_name("config.example.json")
-        if not example.exists():
-            return config
-
-        def merge(base: Dict[str, Any], over: Dict[str, Any]) -> Dict[str, Any]:
-            out = dict(base)
-            for key, value in over.items():
-                out[key] = merge(base[key], value) if isinstance(value, dict) and isinstance(base.get(key), dict) else value
-            return out
-
-        return merge(json.loads(example.read_text()), config)
-
-    @staticmethod
-    def _apply_secrets(config: Dict[str, Any]) -> None:
-        """Les secrets (clé Emby) viennent de data/secrets.env, jamais de GitHub."""
-        secrets = Path("data/secrets.env")
-        if not secrets.exists():
-            return
-        for line in secrets.read_text().splitlines():
-            if "=" in line and not line.lstrip().startswith("#"):
-                key, value = line.split("=", 1)
-                if key.strip() == "EMBY_API_KEY":
-                    config.setdefault("emby", {})["api_key"] = value.strip().strip('"')
 
     def _setup_logging(self) -> None:
         """Configure logging based on configuration"""
@@ -190,7 +155,7 @@ class MouFlopening:
             if self.download_theme(title, 'anime', folder):
                 done += 1
                 if refresh:
-                    emby.refresh_path(folder)
+                    emby.refresh_series(folder.name, title)
             else:
                 failed += 1
 
