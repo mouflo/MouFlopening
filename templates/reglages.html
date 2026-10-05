@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Réglages · MouFlopening</title>
+<link rel="icon" type="image/svg+xml" href="/icons/mouflopening.svg"><link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/icons/manifest.webmanifest"><meta name="theme-color" content="#121315">
+<link rel="stylesheet" href="/ui/mou-ui.css?v={{ version|urlencode }}">
+<script src="/ui/mou-ui.js?v={{ version|urlencode }}" defer></script>
+<style>
+    body { padding:16px; }
+    .container { max-width:760px; margin:0 auto; }
+    button, select, input { font:inherit; }
+    .btn { padding:9px 16px; border:0; border-radius:4px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+    .btn:hover { background:var(--accent-hover); }
+    .btn.ghost { background:var(--field); color:var(--text); font-weight:500; }
+    .btn.ghost:hover { background:#383838; }
+    .panel { background:var(--card); border-radius:8px; padding:16px; margin-bottom:16px; }
+    .panel h2 { margin:0 0 4px; font-size:1.1rem; }
+    .panel .sub { color:var(--muted); font-size:.88rem; margin-bottom:12px; }
+    .field { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+    .field label { font-size:.85rem; color:var(--muted); }
+    .field input[type=text], .field input[type=password], .field select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:10px; outline:none; width:100%; box-sizing:border-box; }
+    .field input:focus { border-color:var(--accent); }
+    .row { display:flex; gap:8px; flex-wrap:wrap; }
+    .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0 0; }
+    .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
+    .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
+    .note.warn { background:rgba(229,168,75,.15); border:1px solid var(--warn); color:#f3d9a8; }
+    .state { font-size:.85rem; color:var(--muted); margin-bottom:8px; }
+    .check { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+    .check input { width:17px; height:17px; accent-color:var(--accent); }
+    .tabsinfo { font-size:.88rem; color:var(--muted); line-height:1.6; }
+    .tabsinfo b { color:var(--text); }
+    .back { display:inline-block; margin-bottom:12px; color:var(--muted); text-decoration:none; }
+    @media (max-width:800px) { body { padding:10px; } .field input, .field select { font-size:16px; } .row .btn { flex:1 1 100%; padding:12px; } }
+</style>
+</head>
+<body>
+<div class="container">
+    <div id="mou-header" data-app="mouflopening" data-prefix="MouFl" data-rest="opening" data-version="{{ version }}" data-sub="Réglages"></div>
+    <a class="back" href="/">← Retour aux thèmes</a>
+
+    <div class="panel">
+        <h2>🎬 Emby</h2>
+        <div class="sub">L'adresse de ton serveur Emby et sa clé API (Emby → Tableau de bord → Clés API).</div>
+        <div class="field"><label for="embyHost">Adresse</label><input type="text" id="embyHost" placeholder="http://192.168.1.134:8096" autocapitalize="off" spellcheck="false"></div>
+        <div class="row"><button class="btn" id="embyHostSave">Enregistrer l'adresse</button></div>
+        <div id="embyHostMsg"></div>
+        <div class="state" id="embyKeyState" style="margin-top:14px"></div>
+        <div class="field"><label for="embyKey">Clé API</label><input type="password" id="embyKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la nouvelle clé ici"></div>
+        <div class="row"><button class="btn ghost" id="embyKeyTest">Tester</button><button class="btn" id="embyKeySave">Enregistrer la clé</button></div>
+        <div id="embyKeyMsg"></div>
+    </div>
+
+    <div class="panel">
+        <h2>🎞️ TheMovieDB</h2>
+        <div class="sub">Sert à retrouver les titres originaux et les identifiants des films et séries (clé « API » de 32 caractères, ou « jeton d'accès » qui commence par eyJ).</div>
+        <div class="state" id="tmdbKeyState"></div>
+        <div class="field"><label for="tmdbKey">Clé API</label><input type="password" id="tmdbKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la nouvelle clé ici"></div>
+        <div class="row"><button class="btn ghost" id="tmdbKeyTest">Tester</button><button class="btn" id="tmdbKeySave">Enregistrer la clé</button></div>
+        <div id="tmdbKeyMsg"></div>
+    </div>
+
+    <div class="panel">
+        <h2>📁 Dossiers</h2>
+        <div class="sub">Le dossier qui contient tes médiathèques (un sous-dossier par type : Animes, Séries, Films…), et l'endroit où sont rangés les anciens thèmes remplacés. L'appli redémarre après l'enregistrement (quelques secondes).</div>
+        <div class="field"><label for="pathParent">Dossier des médiathèques</label><input type="text" id="pathParent" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/Emby-Media"></div>
+        <div class="field"><label for="pathBackup">Dossier des anciens thèmes</label><input type="text" id="pathBackup" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/MouFlopening/Anciens thèmes"></div>
+        <div class="tabsinfo" id="tabsInfo"></div>
+        <div class="row" style="margin-top:12px"><button class="btn" id="pathsSave">Enregistrer et redémarrer</button></div>
+        <div id="pathsMsg"></div>
+    </div>
+
+    <div class="panel">
+        <h2>🌙 Lot de nuit &amp; Telegram</h2>
+        <div class="sub">Chaque nuit, l'appli cherche les thèmes manquants de tous les onglets (mêmes règles que le lot manuel), puis t'envoie un compte rendu sur Telegram s'il y a du nouveau.</div>
+        <label class="check"><input type="checkbox" id="nightOn"> Activer le lot de nuit</label>
+        <div class="field" style="max-width:160px"><label for="nightHour">Heure de lancement</label><select id="nightHour"></select></div>
+        <div class="state" id="tgState"></div>
+        <div class="field"><label for="tgToken">Jeton du bot Telegram (donné par @BotFather)</label><input type="password" id="tgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:ABC… (laisse vide pour garder l'actuel)"></div>
+        <div class="field"><label for="tgChat">Identifiant de ta discussion</label><input type="text" id="tgChat" autocomplete="off" placeholder="Un nombre, ex. 123456789 (laisse vide pour garder l'actuel)"></div>
+        <div class="state" id="nightState"></div>
+        <div class="row"><button class="btn" id="nightSave">Enregistrer</button><button class="btn ghost" id="tgTest">📨 Tester Telegram</button><button class="btn ghost" id="nightRun">▶ Lancer le lot de nuit maintenant</button></div>
+        <div id="nightMsg"></div>
+    </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+async function api(url, opts) {
+    const res = await fetch(url, opts); let data = {};
+    if (res.status === 401) { location.href = '/login'; throw new Error('Session expirée'); }
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok && !data.error) data.error = 'Erreur ' + res.status;
+    return data;
+}
+const post = (url, body) => api(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+const say = (id, text, ok) => { $(id).innerHTML = text ? `<div class="note ${ok === 'warn' ? 'warn' : ok ? 'ok' : 'err'}">${esc(text)}</div>` : ''; };
+
+// ----- clés (Emby, TheMovieDB) -----
+function keyForm(prefix, endpoint) {
+    const state = async () => { const s = await api(endpoint); $(prefix + 'KeyState').textContent = s.configured ? 'Clé actuelle : ' + (s.hint || 'définie') : 'Aucune clé définie'; };
+    $(prefix + 'KeyTest').addEventListener('click', async () => { say(prefix + 'KeyMsg', 'Test…', true); const r = await post(endpoint, {api_key: $(prefix + 'Key').value, test: true}); say(prefix + 'KeyMsg', r.message || r.error, r.ok); });
+    $(prefix + 'KeySave').addEventListener('click', async () => {
+        say(prefix + 'KeyMsg', 'Vérification…', true); const r = await post(endpoint, {api_key: $(prefix + 'Key').value});
+        say(prefix + 'KeyMsg', r.message || r.error, r.ok); if (r.ok) { $(prefix + 'Key').value = ''; state(); }
+    });
+    return state();
+}
+
+// ----- Emby : adresse, dossiers -----
+async function loadPaths() {
+    const p = await api('/api/settings/paths');
+    $('embyHost').value = p.emby_host || ''; $('pathParent').value = p.auto_parent || ''; $('pathBackup').value = p.backup_dir || '';
+    const ic = {movie: '🎬', series: '📺', anime: '🎌'};
+    $('tabsInfo').innerHTML = (p.tabs.length ? '<b>Onglets trouvés :</b><br>' + p.tabs.map(t => `${ic[t.kind] || '📁'} ${esc(t.name)} — ${t.paths.map(esc).join(', ')}${t.ok ? '' : ' ⚠️ introuvable'}`).join('<br>') : '<b>Aucun onglet trouvé</b> : vérifie le dossier ci-dessus.')
+        + (p.ignored.length ? `<br><br>Ignorés (type non reconnu) : ${p.ignored.map(esc).join(', ')}` : '');
+}
+$('embyHostSave').addEventListener('click', async () => { const r = await post('/api/settings/emby-host', {host: $('embyHost').value}); say('embyHostMsg', r.message || r.error, r.ok); });
+$('pathsSave').addEventListener('click', async () => {
+    if (!confirm('Enregistrer ces dossiers ? L\'appli va redémarrer (quelques secondes) ; un lot en cours serait interrompu.')) return;
+    const r = await post('/api/settings/paths', {auto_parent: $('pathParent').value, backup_dir: $('pathBackup').value});
+    if (!r.ok) return say('pathsMsg', r.error, false);
+    say('pathsMsg', r.message, 'warn');
+    for (let i = 0; i < 40; i++) { await new Promise(res => setTimeout(res, 2000)); try { const x = await fetch('/api/settings/paths'); if (x.ok) { await loadPaths(); return say('pathsMsg', 'Dossiers relus : voir les onglets trouvés ci-dessus.', true); } } catch (e) {} }
+    say('pathsMsg', 'L\'appli met longtemps à revenir : recharge la page dans un instant.', 'warn');
+});
+
+// ----- lot de nuit + Telegram -----
+$('nightHour').innerHTML = Array.from({length: 24}, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');
+async function loadNight() {
+    const s = await api('/api/nightly');
+    $('nightOn').checked = s.enabled; $('nightHour').value = s.hour;
+    $('tgState').textContent = s.telegram ? `Telegram : réglé (discussion ${s.chat_hint}${s.telegram_origin === 'MouFlanimeXer' ? ', repris de MouFlanimeXer' : ''})` : 'Telegram : pas encore réglé';
+    $('nightState').textContent = s.last_summary ? 'Dernier lot de nuit : ' + s.last_summary : '';
+}
+$('nightSave').addEventListener('click', async () => {
+    const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, hour: Number($('nightHour').value)});
+    if (r1.error) return say('nightMsg', r1.error, false);
+    if ($('tgToken').value.trim() || $('tgChat').value.trim()) {
+        say('nightMsg', 'Vérification de Telegram…', true);
+        const r = await post('/api/settings/telegram', {token: $('tgToken').value, chat_id: $('tgChat').value});
+        if (!r.ok) return say('nightMsg', r.error, false);
+        $('tgToken').value = ''; $('tgChat').value = ''; say('nightMsg', r.message, true);
+    } else say('nightMsg', 'Enregistré.', true);
+    loadNight();
+});
+$('tgTest').addEventListener('click', async () => { say('nightMsg', 'Envoi…', true); const r = await post('/api/settings/telegram', {}); say('nightMsg', r.message || r.error, r.ok); });
+$('nightRun').addEventListener('click', async () => {
+    if (!confirm('Lancer maintenant le lot de nuit (tous les onglets) ? Un compte rendu sera envoyé sur Telegram à la fin s\'il y a du nouveau.')) return;
+    const r = await post('/api/nightly/run'); say('nightMsg', r.error || 'Lot lancé : suis-le sur la page d\'accueil, dans « Dernier traitement ».', !r.error);
+});
+
+keyForm('emby', '/api/settings/emby'); keyForm('tmdb', '/api/settings/tmdb'); loadPaths(); loadNight();
+</script>
+</body>
+</html>

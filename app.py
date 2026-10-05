@@ -759,6 +759,9 @@ def _nightly_run():
 
 
 nightly_settings.init_app(app, BASE_DIR, nightly, lambda: threading.Thread(target=_nightly_run, daemon=True).start(), lambda: bool(BATCH.get("running")))
+import settings_page
+settings_page.init_app(app, BASE_DIR, lambda: APP_VERSION, lambda: CONFIG, lambda: CATS, lambda: IGNORED_FOLDERS, EMBY,
+                       "/mnt/mouflosyno/MouFlopening/Anciens thèmes")
 threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
 from src.sources import youtube as _yt_module
 threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")),), daemon=True).start()

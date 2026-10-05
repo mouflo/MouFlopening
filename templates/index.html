@@ -117,25 +117,9 @@
 </head>
 <body>
 <div class="container">
-    <div id="mou-header" data-app="mouflopening" data-prefix="MouFl" data-rest="opening" data-version="{{ version }}" data-emby="1" data-tmdb="1"
+    <div id="mou-header" data-app="mouflopening" data-prefix="MouFl" data-rest="opening" data-version="{{ version }}" data-settings="1"
          data-sub="Thèmes musicaux pour ta médiathèque Emby · chaque thème est normalisé à {{ target_db }} dB"></div>
 
-    <details class="panel" id="nightPanel" style="margin-bottom:16px">
-        <summary style="cursor:pointer">🌙 Lot de nuit &amp; compte rendu Telegram <small id="nightState" style="color:var(--muted)"></small></summary>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
-            <label class="check"><input type="checkbox" id="nightOn"> Chercher chaque nuit les thèmes manquants (tous les onglets, mêmes règles que le lot manuel)</label>
-            <label class="check">À <select id="nightHour"></select> h</label>
-            <div class="hint" id="tgState"></div>
-            <input id="tgToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Jeton du bot Telegram (donné par @BotFather)">
-            <input id="tgChat" type="text" autocomplete="off" placeholder="Identifiant de ta discussion (nombre)">
-            <div id="nightMsg"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn" id="nightSave">Enregistrer</button>
-                <button class="btn ghost" id="tgTest">📨 Tester Telegram</button>
-                <button class="btn ghost" id="nightRun">▶ Lancer le lot de nuit maintenant</button>
-            </div>
-        </div>
-    </details>
     <div class="tabs" id="tabs"></div>
 
     <div class="toolbar">
@@ -533,36 +517,6 @@ $('filterText').addEventListener('input', () => { listCollapsed = false; renderL
 $('filterState').addEventListener('change', () => { listCollapsed = false; renderList(); });
 loadLibrary().then(pollBatch);
 
-// ---------- lot de nuit + Telegram ----------
-(async function nightInit() {
-    $('nightHour').innerHTML = Array.from({length: 24}, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')}</option>`).join('');
-    const note2 = (t, k) => note($('nightMsg'), t, k);
-    async function load() {
-        const s = await api('/api/nightly');
-        $('nightOn').checked = s.enabled; $('nightHour').value = s.hour;
-        $('nightState').textContent = s.enabled ? `· actif à ${String(s.hour).padStart(2, '0')} h` + (s.last_summary ? ` · dernier : ${s.last_summary}` : '') : '· désactivé';
-        $('tgState').textContent = s.telegram ? `Telegram : réglé (discussion ${s.chat_hint}${s.telegram_origin === 'MouFlanimeXer' ? ', repris de MouFlanimeXer' : ''})` : 'Telegram : pas encore réglé (colle le jeton et l\'identifiant ci-dessous)';
-    }
-    $('nightSave').addEventListener('click', async () => {
-        const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, hour: Number($('nightHour').value)});
-        if (r1.error) return note2(r1.error, 'err');
-        if ($('tgToken').value.trim() || $('tgChat').value.trim()) {
-            note2('Vérification de Telegram…', 'ok');
-            const r = await post('/api/settings/telegram', {token: $('tgToken').value, chat_id: $('tgChat').value});
-            if (!r.ok) return note2(r.error, 'err');
-            $('tgToken').value = ''; $('tgChat').value = '';
-            note2(r.message, 'ok');
-        } else note2('Enregistré.', 'ok');
-        load();
-    });
-    $('tgTest').addEventListener('click', async () => { note2('Envoi…', 'ok'); const r = await post('/api/settings/telegram', {}); note2(r.message || r.error, r.ok ? 'ok' : 'err'); });
-    $('nightRun').addEventListener('click', async () => {
-        if (!confirm('Lancer maintenant le lot de nuit (tous les onglets) ? Un compte rendu sera envoyé sur Telegram à la fin s\'il y a du nouveau.')) return;
-        const r = await post('/api/nightly/run'); if (r.error) return note2(r.error, 'err');
-        note2('Lot lancé : suis-le dans la fenêtre « Dernier traitement ».', 'ok'); pollBatch();
-    });
-    try { await load(); } catch (e) {}
-})();
 </script>
 </body>
 </html>

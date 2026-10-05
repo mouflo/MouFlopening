@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.20.0] - 2026-10-05
+
+### Ajouté
+- Page « ⚙️ Réglages » (bouton en haut de la page, à la place de « Clé Emby » et « Clé TMDB ») qui regroupe tout : adresse et clé API d'Emby, clé TheMovieDB, dossier des médiathèques, dossier des anciens thèmes, lot de nuit et bot Telegram. Les onglets trouvés dans le dossier choisi sont affichés
+- Changer les dossiers redémarre l'appli toute seule (quelques secondes) pour les relire ; l'adresse d'Emby, les clés et Telegram sont pris en compte tout de suite
+- Rien n'est enregistré si le dossier est introuvable sur le serveur ou si Telegram refuse le jeton
+
+### Modifié
+- Le panneau « Lot de nuit » quitte la page d'accueil pour la page Réglages
+
 ## [0.19.0] - 2026-10-05
 
 ### Ajouté
