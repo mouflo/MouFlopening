@@ -1,7 +1,7 @@
 {
   "emby": {
     "host": "http://192.168.1.100:8096",
-    "api_key": "your_emby_api_key_here",
+    "api_key": "cle api emby",
     "scan_after_download": true,
     "timeout": 30
   },
