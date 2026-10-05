@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 _URL_RE = re.compile(r"^https?://[^\s/]+(:\d{1,5})?(/\S*)?$")
 
 
-def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby, backup_default):
+def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby, backup_default, get_db=None, set_db=None):
     base_dir = Path(base_dir)
 
     @app.route("/reglages")
@@ -138,6 +138,32 @@ def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby,
         if body.get("restart", True):                          # le service redémarre tout seul (systemd) et relit les dossiers
             threading.Thread(target=lambda: (time.sleep(1.5), os._exit(0)), daemon=True).start()
         return jsonify({"ok": True, "restart": bool(body.get("restart", True)), "message": "Enregistré. L'appli redémarre pour relire les dossiers…"})
+
+    @app.route("/api/settings/audio")
+    def audio_state():
+        return jsonify({"target_db": get_db() if get_db else 89})
+
+    @app.route("/api/settings/audio", methods=["POST"])
+    def audio_save():
+        try:
+            value = round(float(str((request.get_json(silent=True) or {}).get("target_db", "")).replace(",", ".")), 1)
+        except ValueError:
+            return jsonify({"ok": False, "error": "Entre un nombre, par exemple 89."}), 400
+        if not 70 <= value <= 100:
+            return jsonify({"ok": False, "error": "Choisis un niveau entre 70 et 100 dB (89 est la référence habituelle)."}), 400
+        path = base_dir / "config.json"
+        try:
+            cfg = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except ValueError:
+            return jsonify({"ok": False, "error": "config.json est illisible : rien n'a été modifié."}), 500
+        cfg.setdefault("audio", {})["target_db"] = value
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+        if set_db:
+            set_db(value)                               # pris en compte tout de suite, sans redémarrer
+        logger.info("Niveau des thèmes réglé à %g dB depuis la page web", value)
+        return jsonify({"ok": True, "message": f"Enregistré : les prochains thèmes seront à {value:g} dB. Les thèmes déjà en place ne changent pas : utilise « Normaliser les thèmes existants » sur la page d'accueil pour les ramener à ce niveau."})
 
     @app.route("/api/settings/youtube-cookies")
     def yt_cookies_state():

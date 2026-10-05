@@ -8,48 +8,8 @@
 <link rel="icon" type="image/svg+xml" href="/icons/mouflopening.svg"><link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/icons/manifest.webmanifest"><meta name="theme-color" content="#121315">
 <link rel="stylesheet" href="/ui/mou-ui.css?v={{ version|urlencode }}">
 <script src="/ui/mou-ui.js?v={{ version|urlencode }}" defer></script>
-<style>
-    body { padding:16px; }
-    .container { max-width:760px; margin:0 auto; }
-    button, select, input { font:inherit; }
-    .btn { padding:9px 16px; border:0; border-radius:4px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
-    .btn:hover { background:var(--accent-hover); }
-    .btn.ghost { background:var(--field); color:var(--text); font-weight:500; }
-    .btn.ghost:hover { background:#383838; }
-    .panel { background:var(--card); border-radius:8px; padding:16px; margin-bottom:16px; }
-    .panel h2 { margin:0 0 4px; font-size:1.1rem; }
-    .panel .sub { color:var(--muted); font-size:.88rem; margin-bottom:12px; }
-    .field { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
-    .field label { font-size:.85rem; color:var(--muted); }
-    .field input[type=text], .field input[type=password], .field select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:10px; outline:none; width:100%; box-sizing:border-box; }
-    .field input:focus { border-color:var(--accent); }
-    .row { display:flex; gap:8px; flex-wrap:wrap; }
-    .row.nowrap { flex-wrap:nowrap; } .row.nowrap input { flex:1; min-width:0; }
-    .frow { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-    .frow input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); flex:none; }
-    .frow .fn { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
-    .frow .fn small { display:block; color:var(--muted); }
-    .frow select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:8px; }
-    .frow.off .fn { opacity:.55; }
-    .modalbg { position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; z-index:50; padding:12px; }
-    .modalbg.show { display:flex; }
-    .modalbox { background:var(--card); border-radius:10px; padding:16px; width:min(560px,100%); max-height:85vh; display:flex; flex-direction:column; gap:10px; }
-    .modalbox .cur { font-family:monospace; font-size:.85rem; overflow-wrap:anywhere; background:var(--field); border-radius:4px; padding:8px; }
-    .dirs { overflow-y:auto; border:1px solid var(--line); border-radius:6px; min-height:180px; }
-    .dirs div { padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--line); }
-    .dirs div:hover { background:var(--field); }
-    .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0 0; }
-    .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
-    .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
-    .note.warn { background:rgba(229,168,75,.15); border:1px solid var(--warn); color:#f3d9a8; }
-    .state { font-size:.85rem; color:var(--muted); margin-bottom:8px; }
-    .check { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-    .check input { width:17px; height:17px; accent-color:var(--accent); }
-    .tabsinfo { font-size:.88rem; color:var(--muted); line-height:1.6; }
-    .tabsinfo b { color:var(--text); }
-    .back { display:inline-block; margin-bottom:12px; color:var(--muted); text-decoration:none; }
-    @media (max-width:800px) { body { padding:10px; } .field input, .field select { font-size:16px; } .row .btn { flex:1 1 100%; padding:12px; } }
-</style>
+<link rel="stylesheet" href="/ui/mou-settings.css?v={{ version|urlencode }}">
+<script src="/ui/mou-settings.js?v={{ version|urlencode }}"></script>
 </head>
 <body>
 <div class="container">
@@ -75,6 +35,14 @@
         <div class="field"><label for="tmdbKey">Clé API</label><input type="password" id="tmdbKey" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la nouvelle clé ici"></div>
         <div class="row"><button class="btn ghost" id="tmdbKeyTest">Tester</button><button class="btn" id="tmdbKeySave">Enregistrer la clé</button></div>
         <div id="tmdbKeyMsg"></div>
+    </div>
+
+    <div class="panel">
+        <h2>🔊 Volume des thèmes</h2>
+        <div class="sub">Chaque thème est ramené au même niveau (mesure ReplayGain / MP3Gain). 89 dB est la référence habituelle ; plus le nombre est élevé, plus les thèmes sonnent fort.</div>
+        <div class="field" style="max-width:200px"><label for="dbValue">Niveau en dB (entre 70 et 100)</label><input type="text" inputmode="decimal" id="dbValue" autocomplete="off" placeholder="89"></div>
+        <div class="row"><button class="btn" id="dbSave">Enregistrer</button></div>
+        <div id="dbMsg"></div>
     </div>
 
     <div class="panel">
@@ -129,29 +97,6 @@
     <div class="row"><button class="btn ghost" id="browseUp">⬆ Remonter</button><button class="btn" id="browsePick">✅ Choisir ce dossier</button><button class="btn ghost" id="browseCancel">Annuler</button></div>
 </div></div>
 <script>
-const $ = id => document.getElementById(id);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-async function api(url, opts) {
-    const res = await fetch(url, opts); let data = {};
-    if (res.status === 401) { location.href = '/login'; throw new Error('Session expirée'); }
-    try { data = await res.json(); } catch (e) {}
-    if (!res.ok && !data.error) data.error = 'Erreur ' + res.status;
-    return data;
-}
-const post = (url, body) => api(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
-const say = (id, text, ok) => { $(id).innerHTML = text ? `<div class="note ${ok === 'warn' ? 'warn' : ok ? 'ok' : 'err'}">${esc(text)}</div>` : ''; };
-
-// ----- clés (Emby, TheMovieDB) -----
-function keyForm(prefix, endpoint) {
-    const state = async () => { const s = await api(endpoint); $(prefix + 'KeyState').textContent = s.configured ? 'Clé actuelle : ' + (s.hint || 'définie') : 'Aucune clé définie'; };
-    $(prefix + 'KeyTest').addEventListener('click', async () => { say(prefix + 'KeyMsg', 'Test…', true); const r = await post(endpoint, {api_key: $(prefix + 'Key').value, test: true}); say(prefix + 'KeyMsg', r.message || r.error, r.ok); });
-    $(prefix + 'KeySave').addEventListener('click', async () => {
-        say(prefix + 'KeyMsg', 'Vérification…', true); const r = await post(endpoint, {api_key: $(prefix + 'Key').value});
-        say(prefix + 'KeyMsg', r.message || r.error, r.ok); if (r.ok) { $(prefix + 'Key').value = ''; state(); }
-    });
-    return state();
-}
-
 // ----- Emby : adresse, dossiers -----
 let folders = [];
 const KIND_OPTS = [['', '— type ? —'], ['movie', '🎬 Films'], ['series', '📺 Séries'], ['anime', '🎌 Animes']];
@@ -249,6 +194,8 @@ $('ckTest').addEventListener('click', async () => { const r = await post('/api/s
 $('ckSave').addEventListener('click', async () => { const r = await post('/api/settings/youtube-cookies', {text: $('ckText').value}); say('ckMsg', r.message || r.error, r.ok); if (r.ok) { $('ckText').value = ''; loadCk(); } });
 $('ckClear').addEventListener('click', async () => { if (!confirm('Supprimer les cookies YouTube enregistrés ?')) return; const r = await post('/api/settings/youtube-cookies', {clear: true}); say('ckMsg', r.message || r.error, r.ok); loadCk(); });
 loadCk();
+(async () => { const a = await api('/api/settings/audio'); $('dbValue').value = a.target_db; })();
+simpleSave('dbSave', 'dbMsg', '/api/settings/audio', () => ({target_db: $('dbValue').value}));
 keyForm('emby', '/api/settings/emby'); keyForm('tmdb', '/api/settings/tmdb'); loadPaths(); loadNight();
 </script>
 </body>

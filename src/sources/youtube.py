@@ -256,7 +256,7 @@ class YouTubeSource(BaseSource):
                     logger.error("[YouTube] Aucun fichier reçu (durée %s s)", dur or "inconnue")
                     self.last_error = "YouTube n'a fourni aucun fichier pour cette vidéo : choisis-en une autre"
                 return False
-            say("Conversion en MP3 et réglage du volume (89 dB)…")
+            say(f"Conversion en MP3 et réglage du volume ({self.target_db:g} dB)…")
             out = Path(tmp) / "theme.mp3"
             if not convert_to_mp3(files[0], out, self.target_db):
                 return False

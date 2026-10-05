@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.0] - 2026-10-05
+
+### Ajouté
+- Réglages : nouveau cadre « 🔊 Volume des thèmes » pour choisir le niveau de normalisation en dB (89 par défaut, entre 70 et 100). Pris en compte tout de suite, sans redémarrage ; les thèmes déjà en place se ramènent au nouveau niveau avec « Normaliser les thèmes existants »
+
+### Amélioré
+- Le style et les petits outils de la page Réglages sont maintenant dans deux fichiers communs (`ui/mou-settings.css` et `ui/mou-settings.js`), pour avoir la même page dans les trois applis
+
 ## [0.23.4] - 2026-10-05
 
 ### Corrigé

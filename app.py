@@ -1042,8 +1042,17 @@ def _nightly_run():
 
 nightly_settings.init_app(app, BASE_DIR, nightly, lambda: threading.Thread(target=_nightly_run, daemon=True).start(), lambda: bool(BATCH.get("running")))
 import settings_page
+
+
+def _set_target_db(value):
+    global TARGET_DB
+    TARGET_DB = float(value)
+    SOURCE.target_db = YOUTUBE.target_db = TARGET_DB
+    os.environ['_TARGET_DB'] = f'{TARGET_DB:g}'
+
+
 settings_page.init_app(app, BASE_DIR, lambda: APP_VERSION, lambda: CONFIG, lambda: CATS, lambda: IGNORED_FOLDERS, EMBY,
-                       "/mnt/mouflosyno/MouFlopening/Anciens thèmes")
+                       "/mnt/mouflosyno/MouFlopening/Anciens thèmes", get_db=lambda: TARGET_DB, set_db=_set_target_db)
 threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
 from src.sources import youtube as _yt_module
 threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")),), daemon=True).start()
