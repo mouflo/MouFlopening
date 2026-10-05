@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.19.0] - 2026-10-05
+
+### Ajouté
+- Lot de nuit : chaque nuit à l'heure choisie (3 h par défaut), l'appli cherche les thèmes manquants de tous les onglets (mêmes règles que le lot manuel) puis envoie un compte rendu illustré d'emojis sur Telegram. Aucun message n'est envoyé quand rien de nouveau n'a été trouvé
+- Panneau « 🌙 Lot de nuit & compte rendu Telegram » sur la page : activer, choisir l'heure, régler le bot Telegram (jeton + identifiant de discussion, vérifiés par un message de test), « Lancer maintenant ». Le jeton est gardé dans data/secrets.env, jamais sur GitHub ni renvoyé à la page ; à défaut, la config Telegram de MouFlanimeXer est reprise si elle existe sur la même machine
+
 ## [0.18.0] - 2026-10-05
 
 ### Ajouté

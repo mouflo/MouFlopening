@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -244,6 +245,7 @@ def _run_batch(limit, with_seasons, cat=0):
         todo = todo[:limit]
     with _batch_lock:
         BATCH.update(kind="download", running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
+    added_titles, n_failed = [], 0
     _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)")
                 + (f" · {n_skip} mis de côté (déjà cherchés sans résultat) ignoré(s)" if n_skip else ""))
     try:
@@ -261,6 +263,10 @@ def _run_batch(limit, with_seasons, cat=0):
                 skipped.add(folder)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
+            if ok:
+                added_titles.append(label)
+            else:
+                n_failed += 1
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
     except Exception:
         logger.exception("Le lot s'est arrêté sur une erreur")
@@ -268,6 +274,7 @@ def _run_batch(limit, with_seasons, cat=0):
     finally:
         with _batch_lock:
             BATCH.update(running=False, current="")
+    return {"kind": kind, "added": added_titles, "failed": n_failed}
 
 
 def year_of(name):
@@ -721,6 +728,38 @@ def _clean_stale_partials():
 
 
 threading.Thread(target=_clean_stale_partials, daemon=True).start()
+
+# ---------- lot de nuit + compte rendu Telegram ----------
+import nightly_settings
+from src import nightly
+nightly.init(BASE_DIR / "data" / "nightly.json")
+
+
+def _nightly_run():
+    """Cherche les thèmes manquants de tous les onglets, puis envoie le compte rendu par Telegram."""
+    with _batch_lock:
+        if BATCH["running"]:
+            return
+        BATCH.update(kind="download", running=True, stop=False, total=0, done=0, failed=0, current="Lot de nuit…", messages=[])
+    t0, by_cat = time.time(), []
+    try:
+        for i, c in enumerate(CATS):
+            with _batch_lock:
+                BATCH["running"] = True
+            by_cat.append(_run_batch(None, c["kind"] == "anime", i))
+    except Exception:
+        logger.exception("Lot de nuit interrompu")
+    text = nightly.format_report(by_cat, time.time() - t0)
+    summary = f"{sum(len(c['added']) for c in by_cat)} ajouté(s), {sum(c['failed'] for c in by_cat)} sans thème"
+    nightly.save(last_summary=f"{datetime.now():%d/%m %H:%M} : {summary}")
+    logger.info("[nuit] Lot terminé : %s", summary)
+    if text:
+        ok, msg = nightly.send(text)
+        logger.info("[nuit] Telegram : %s", msg)
+
+
+nightly_settings.init_app(app, BASE_DIR, nightly, lambda: threading.Thread(target=_nightly_run, daemon=True).start(), lambda: bool(BATCH.get("running")))
+threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
 from src.sources import youtube as _yt_module
 threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")),), daemon=True).start()
 

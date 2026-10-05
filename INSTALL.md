@@ -76,3 +76,7 @@ tail -f /var/log/mouflopening-deploy.log
 
 `deploy.sh` se remplace lui-même pendant qu'il tourne (`git reset`). **Ne jamais modifier les lignes situées avant
 `git reset`** : tout ce qui change se met après.
+
+## Lot de nuit et Telegram (facultatif)
+
+Sur la page, ouvre « 🌙 Lot de nuit & compte rendu Telegram » : coche l'option, choisis l'heure, colle le jeton de ton bot (obtenu auprès de @BotFather) et l'identifiant de ta discussion, puis « Enregistrer ». Un message de test arrive sur Telegram. Écris d'abord un message à ton bot, sinon Telegram refusera de t'en envoyer. Le jeton reste dans `data/secrets.env`, jamais sur GitHub.
