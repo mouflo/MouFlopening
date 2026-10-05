@@ -45,7 +45,7 @@ _tmdb_key_from_moufloster()
 
 from src import library
 from src.emby_client import EmbyClient
-from src.fsutil import safe_move
+from src.fsutil import safe_copy, safe_move
 from src.library import THEME_DIR, THEME_EXTS, THEME_FILENAME, find_theme
 from src.sources.animethemes import AnimeThemesSource
 from src.sources.youtube import YouTubeSource
@@ -164,18 +164,48 @@ def _slug(text):
     return re.sub(r"[^\w.-]+", "_", text).strip("_")[:80] or "theme"
 
 
-def _backup_existing(folder):
-    """Avant de poser un nouveau thème, l'ancien (theme.mp3 ou theme.flac, ogg…) est mis de côté, jamais supprimé."""
-    for ext in THEME_EXTS:
-        old = folder / f"theme{ext}"
-        if old.is_file():
-            dest = _backup_dir()
-            name = f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(folder.parent.name)}_{_slug(folder.name)}{ext}"
-            safe_move(old, dest / name)
-            logger.info("Ancien thème mis de côté : %s", dest / name)
+def _backup_name(folder, ext, extra=""):
+    """Nom libre dans le dossier des anciens thèmes (jamais d'écrasement, même deux fois dans la même seconde)."""
+    dest = _backup_dir()
+    base = f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(folder.parent.name)}_{_slug(folder.name)}{('_' + _slug(extra)) if extra else ''}"
+    target, n = dest / f"{base}{ext}", 2
+    while target.exists():
+        target, n = dest / f"{base}_{n}{ext}", n + 1
+    return target
+
+
+def _backup_existing(folder, keep=None):
+    """L'ancien thème (theme.mp3, theme.flac…, ou fichiers du dossier theme-music) est mis de côté, jamais supprimé.
+    keep : fichier à laisser en place (le nouveau thème)."""
+    olds = [folder / f"theme{ext}" for ext in THEME_EXTS]
+    d = folder / library.THEME_DIR
+    try:
+        if d.is_dir():
+            olds += [f for f in sorted(d.iterdir()) if f.suffix.lower() in THEME_EXTS]
+    except OSError:
+        pass
+    for old in olds:
+        if keep is not None and old == keep or not old.is_file():
+            continue
+        target = _backup_name(folder, old.suffix.lower(), old.stem if old.parent != folder else "")
+        safe_move(old, target)
+        logger.info("Ancien thème mis de côté : %s", target)
+
+
+def _install_theme(tmp, folder):
+    """Pose le nouveau thème (tmp, déjà dans le dossier) sans jamais laisser le titre sans thème :
+    l'ancien theme.mp3 est d'abord COPIÉ dans les anciens thèmes, puis remplacé d'un coup ; les autres formats sont ensuite mis de côté."""
+    cur = folder / THEME_FILENAME
+    if cur.is_file():
+        target = _backup_name(folder, ".mp3")
+        safe_copy(cur, target)                    # en cas d'échec : exception, rien n'a bougé
+        logger.info("Ancien thème mis de côté : %s", target)
+    safe_move(tmp, cur)                           # même dossier : remplacement en une fois (os.replace)
+    _backup_existing(folder, keep=cur)
 
 
 SOURCES_FILE = BASE_DIR / "data" / "theme_sources.json"
+TRANSIENT = "⏳ "      # début des messages d'échec passager (réseau, écriture) : le titre n'est pas « mis de côté »
 
 
 def _download_replace(source, url, folder, trusted=False, forbid_same_as=None, any_url=False):
@@ -208,8 +238,15 @@ def _download_replace(source, url, folder, trusted=False, forbid_same_as=None, a
         except OSError:
             pass
     progress.say("Mise en place du thème (l'ancien est mis de côté)…")
-    _backup_existing(folder)
-    safe_move(tmp, folder / THEME_FILENAME)
+    try:
+        _install_theme(tmp, folder)
+    except OSError as e:
+        logger.error("Mise en place impossible dans %s : %s", folder, e)
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False, f"écriture impossible dans le dossier ({e.strerror or e}) : l'ancien thème est conservé"
     from src import dupes
     dupes.remember_source(SOURCES_FILE, folder, url)
     return True, ""
@@ -251,8 +288,22 @@ def _batch_state_text():
             f"({'vérifiés' if norm else 'ajoutés'} {b['done']}, {'erreurs' if norm else 'introuvables'} {b['failed']}) · en cours : {b['current'] or '-'}")
 
 
-def _run_batch(limit, with_seasons, cat=0):
+def _run_batch(limit, with_seasons, cat=0, fresh=True):
+    """fresh : nouveau lot (journal remis à zéro) ; False pour les onglets suivants du lot de nuit."""
     kind = CATS[cat]["kind"]
+    added_titles, n_failed = [], 0
+    try:
+        return _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles)
+    except Exception:
+        logger.exception("Le lot s'est arrêté sur une erreur")
+        _batch_note("⚠️ Erreur inattendue (détails dans le Journal)")
+        return {"kind": kind, "added": added_titles, "failed": BATCH.get("failed", 0)}
+    finally:
+        with _batch_lock:
+            BATCH.update(running=False, current="")
+
+
+def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
     roots = list(CATS[cat]["paths"])
     todo = [("film" if kind == "movie" else "série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
     if with_seasons and kind == "anime":          # films et séries : seul ThemerrDB est accepté, et il ne connaît pas les saisons
@@ -264,11 +315,13 @@ def _run_batch(limit, with_seasons, cat=0):
     if limit:
         todo = todo[:limit]
     with _batch_lock:
-        BATCH.update(kind="download", running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
-    added_titles, n_failed = [], 0
-    _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)")
+        BATCH.update(kind="download", running=True, total=len(todo), done=0, failed=0, current="")
+        if fresh:
+            BATCH["messages"] = []
+    n_failed = 0
+    _batch_note(("" if fresh else f"— {CATS[cat]['name']} — ") + f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)")
                 + (f" · {n_skip} mis de côté (déjà cherchés sans résultat) ignoré(s)" if n_skip else ""))
-    try:
+    if True:
         for _what, title, folder, series, number in todo:
             if BATCH["stop"]:
                 _batch_note("Arrêt demandé")
@@ -279,7 +332,7 @@ def _run_batch(limit, with_seasons, cat=0):
             ok, msg = _auto_one(folder, title, series, number, kind=kind)   # kind = type de l'onglet (anime / série / film)
             if ok:
                 skipped.remove(folder)
-            elif kind == "anime":              # films et séries : « pas dans ThemerrDB » ne veut pas dire « introuvable » (recherche à la main possible)
+            elif kind == "anime" and not msg.startswith(TRANSIENT):   # panne passagère : pas mis de côté. Films et séries : « pas dans ThemerrDB » ne veut pas dire « introuvable » (recherche à la main possible)
                 skipped.add(folder)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
@@ -288,12 +341,6 @@ def _run_batch(limit, with_seasons, cat=0):
             else:
                 n_failed += 1
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
-    except Exception:
-        logger.exception("Le lot s'est arrêté sur une erreur")
-        _batch_note("⚠️ Erreur inattendue (détails dans le Journal)")
-    finally:
-        with _batch_lock:
-            BATCH.update(running=False, current="")
     return {"kind": kind, "added": added_titles, "failed": n_failed}
 
 
@@ -380,6 +427,8 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
                 if alt and alt.casefold() != query.casefold():
                     result = source.search(alt, mtype)
             if not result:
+                if getattr(source, "api_error", False):
+                    return False, f"{TRANSIENT}{source.name} ne répond pas pour le moment : sera retenté au prochain lot"
                 return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
             if number is not None:                     # saison : jamais le même thème que la série ou une autre saison
                 from src import dupes
@@ -389,7 +438,7 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
         ok, why = _download_replace(source, result.url, folder, trusted=(kind != "anime"),
                                     forbid_same_as=series if (kind == "anime" and number is not None) else None)   # films/séries : vidéo choisie par ThemerrDB
         if not ok:
-            return False, why
+            return False, why if why.startswith("même thème") else TRANSIENT + why    # échec de téléchargement : on retentera
     emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
     return True, f"{result.title} · {emby['message']}"
 
@@ -427,24 +476,29 @@ def _run_normalize():
         for n_seen, (label, path) in enumerate(files, 1):
             if n_seen % 20 == 0:
                 save_registry()     # enregistré au fil de l'eau : un redémarrage (mise à jour) ne fait pas tout refaire
-            for leftover in path.parent.glob("*.partiel"):    # reste d'une copie interrompue (redémarrage en plein travail)
-                try:
-                    leftover.unlink()
-                except OSError:
-                    pass
+            with _work_lock:                               # jamais pendant un enregistrement en cours dans ce dossier
+                for leftover in path.parent.glob("*.partiel"):    # reste d'une copie interrompue (redémarrage en plein travail)
+                    try:
+                        if time.time() - leftover.stat().st_mtime > 600:
+                            leftover.unlink()
+                    except OSError:
+                        pass
             if BATCH["stop"]:
                 _batch_note("Arrêt demandé")
                 break
             with _batch_lock:
                 BATCH["current"] = label
-            if registry.get(str(path)) == _signature(path):
+            known = registry.get(str(path))
+            if isinstance(known, list) and len(known) == 2:
+                known = known + [89.0]                         # anciennes entrées : normalisées à 89 dB
+            if known == _signature(path) + [TARGET_DB]:
                 already += 1
                 with _batch_lock:
                     BATCH["done"] += 1
                 continue
             try:
                 with _work_lock:
-                    status, before, after = normalize_file(path, TARGET_DB, backup_dir=backup / _slug(label))
+                    status, before, after = normalize_file(path, TARGET_DB, backup_dir=backup / _slug(f"{path.parent.parent.name}_{path.parent.name}"))
             except Exception as e:      # un fichier récalcitrant ne doit pas arrêter tout le lot
                 logger.exception("Normalisation impossible : %s", path)
                 status, before, after = "error", None, None
@@ -459,11 +513,11 @@ def _run_normalize():
                 continue
             if status == "done":
                 changed += 1
-                registry[str(path)] = _signature(path)
+                registry[str(path)] = _signature(path) + [TARGET_DB]
                 _batch_note(f"🔊 {label} — {before:.1f} → {after:.1f} dB" if after is not None else f"🔊 {label} normalisé")
             else:
                 already += 1
-                registry[str(path)] = _signature(path)
+                registry[str(path)] = _signature(path) + [TARGET_DB]
             with _batch_lock:
                 BATCH["done"] += 1
         save_registry()
@@ -504,12 +558,12 @@ def api_library():
 
 
 def _search_work(body):
-    title = body.get("title", "").strip()
+    title = str(body.get("title") or "").strip()
     if not title:
         return {"error": "Titre vide"}, 400
     try:
         kind = CATS[int(body.get("cat", 0))]["kind"]
-    except (ValueError, IndexError):
+    except (ValueError, IndexError, TypeError):
         kind = "anime"
 
     titles = [title]
@@ -580,7 +634,7 @@ def api_search():
 
 @app.route("/api/job/<jid>")
 def api_job(jid):
-    st = progress.status(jid, int(request.args.get("since", 0) or 0))
+    st = progress.status(jid, request.args.get("since", 0, type=int) or 0)
     if st is None:
         return jsonify({"error": "Opération inconnue (l'appli a peut-être redémarré)"}), 404
     return jsonify(st)
@@ -623,6 +677,12 @@ def api_save():
 # ---------- thème personnalisé : un lien (YouTube ou autre site pris en charge par yt-dlp) ou un fichier audio de l'utilisateur ----------
 AUDIO_EXTS = (".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wav", ".wma", ".mp4", ".webm", ".mka")
 MAX_UPLOAD = 150 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD + 1024 * 1024      # vraie limite, même sans taille annoncée par le navigateur
+
+
+@app.errorhandler(413)
+def _too_big(_e):
+    return jsonify({"error": "Fichier trop gros (150 Mo maximum)"}), 413
 
 
 def _public_url(url):
@@ -684,8 +744,7 @@ def _custom_file_work(item_id, title, tmp_src, original_name):
                 tmp = folder / "theme.nouveau.partiel"               # copié à côté d'abord : le thème en place n'est touché qu'une fois le nouveau prêt
                 safe_move(out, tmp)
             progress.say("Mise en place du thème (l'ancien est mis de côté)…")
-            _backup_existing(folder)
-            safe_move(tmp, folder / THEME_FILENAME)
+            _install_theme(tmp, folder)
             from src import dupes
             dupes.remember_source(SOURCES_FILE, folder, "fichier : " + original_name)
             progress.say("Mise à jour d'Emby…")
@@ -731,9 +790,9 @@ def _stage_work(item_id, kind_src, url=None, upload=None, upload_name=""):
     """Prépare la copie de travail (thème actuel, lien ou fichier envoyé). -> ({token, duration, name}, 200) ou erreur"""
     import tempfile
     folder, series, number = library.resolve_target(ROOTS, item_id)
-    if not folder:
-        return {"error": "Série ou saison introuvable"}, 404
     try:
+        if not folder:
+            return {"error": "Série ou saison introuvable"}, 404
         with tempfile.TemporaryDirectory() as work:
             if kind_src == "current":
                 cur = find_theme(folder)
@@ -749,7 +808,8 @@ def _stage_work(item_id, kind_src, url=None, upload=None, upload_name=""):
                 src = Path(work) / "source.mp3"
                 source = SOURCE if SOURCE.is_allowed_url(url) else YOUTUBE
                 with _work_lock:
-                    ok = (source.download(url, src, trusted=True) if source is YOUTUBE else source.download(url, src))
+                    ok = (YOUTUBE.download(YOUTUBE.canonical_url(url), src, trusted=True, any_url=True) if source is YOUTUBE
+                          else source.download(url, src))
                 if not ok:
                     return {"error": "Téléchargement impossible : " + (getattr(source, "last_error", "") or "détails dans le Journal")}, 502
                 label = "lien"
@@ -870,7 +930,8 @@ def api_duplicates_fix():
                 continue
             _backup_existing(folder)
             skipped.remove(folder)
-            n += 1
+            if not find_theme(folder):
+                n += 1
     logger.info("Doublons de saisons : %d thème(s) mis de côté", n)
     return jsonify({"ok": True, "count": n})
 
@@ -930,17 +991,21 @@ def api_theme():
 @app.route("/api/batch/start", methods=["POST"])
 def api_batch_start():
     body = request.get_json(silent=True) or {}
-    limit, with_seasons = body.get("limit"), bool(body.get("seasons"))
+    with_seasons = bool(body.get("seasons"))
     try:
         cat = int(body.get("cat", 0))
         CATS[cat]
-    except (ValueError, IndexError):
+    except (ValueError, IndexError, TypeError):
         return jsonify({"error": "Médiathèque inconnue"}), 400
+    try:
+        limit = int(body["limit"]) if body.get("limit") else None
+    except (ValueError, TypeError):
+        return jsonify({"error": "Nombre maximum invalide"}), 400
     with _batch_lock:   # on marque « en cours » tout de suite : la page qui interroge juste après le voit
         if BATCH["running"]:
             return jsonify({"error": "Un lot est déjà en cours"}), 409
         BATCH.update(running=True, stop=False, total=0, done=0, failed=0, current="Préparation…", messages=[])
-    threading.Thread(target=_run_batch, args=(int(limit) if limit else None, with_seasons, cat), daemon=True).start()
+    threading.Thread(target=_run_batch, args=(limit, with_seasons, cat), daemon=True).start()
     return jsonify({"ok": True})
 
 
@@ -1026,9 +1091,11 @@ def _nightly_run():
     t0, by_cat = time.time(), []
     try:
         for i, c in enumerate(CATS):
+            if BATCH["stop"]:                       # « Arrêter » arrête tout le lot de nuit, pas seulement l'onglet en cours
+                break
             with _batch_lock:
                 BATCH["running"] = True
-            by_cat.append(_run_batch(None, c["kind"] == "anime" and nightly.settings()["seasons"], i))
+            by_cat.append(_run_batch(None, c["kind"] == "anime" and nightly.settings()["seasons"], i, fresh=(i == 0)))
     except Exception:
         logger.exception("Lot de nuit interrompu")
     text = nightly.format_report(by_cat, time.time() - t0)
@@ -1055,7 +1122,7 @@ settings_page.init_app(app, BASE_DIR, lambda: APP_VERSION, lambda: CONFIG, lambd
                        "/mnt/mouflosyno/MouFlopening/Anciens thèmes", get_db=lambda: TARGET_DB, set_db=_set_target_db)
 threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
 from src.sources import youtube as _yt_module
-threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")),), daemon=True).start()
+threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")) or _work_lock.locked(),), daemon=True).start()
 
 
 if __name__ == "__main__":

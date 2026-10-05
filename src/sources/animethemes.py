@@ -49,6 +49,7 @@ class AnimeThemesSource(BaseSource):
             return None
 
         logger.info("[AnimeThemes] Recherche : %s", title)
+        self.api_error = False
         animes = self._query_animes(title)
         best, score = self._best_anime(title, animes)
         if not best:
@@ -105,6 +106,7 @@ class AnimeThemesSource(BaseSource):
             return resp.json().get("anime", [])
         except (requests.RequestException, ValueError) as e:
             logger.error("[AnimeThemes] Erreur API : %s", e)
+            self.api_error = True          # panne passagère : ce n'est pas « introuvable »
             return []
 
     def _best_anime(self, title: str, animes: List[Dict[str, Any]]):

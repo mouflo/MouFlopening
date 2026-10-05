@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.25.0] - 2026-10-05
+
+### Corrigé (audit complet)
+- Changer de titre pendant une recherche pouvait afficher les résultats de l'ancien titre et enregistrer le thème dans le mauvais dossier : la recherche précédente est maintenant arrêtée et ses résultats ignorés
+- Le remplacement d'un thème ne laisse plus jamais le titre sans thème : l'ancien est d'abord copié dans les anciens thèmes, puis remplacé d'un coup ; deux sauvegardes dans la même seconde ne s'écrasent plus
+- Une panne passagère (AnimeThemes injoignable, erreur d'écriture sur le NAS) ne met plus le titre « de côté » : il sera retenté au prochain lot
+- « Normaliser » refait bien le travail après un changement de niveau en dB (le niveau est retenu pour chaque fichier)
+- Normalisation : les originaux de deux titres au même nom (ex. deux années différentes) ne s'écrasent plus
+- Un lot ne peut plus rester bloqué « en cours » après une erreur de lecture du NAS
+- « Arrêter » pendant le lot de nuit arrête tout le lot, pas seulement l'onglet en cours ; le journal du lot de nuit garde tous les onglets
+- Les thèmes rangés dans un dossier `theme-music` peuvent être supprimés et dédoublonnés
+- « ✂️ Éditer d'abord » accepte tous les liens (youtu.be, liens avec options, autres sites) comme « Utiliser ce lien »
+- Liens directs vers un fichier audio (durée inconnue) acceptés
+- Pendant un lot, la liste n'est plus relue toutes les 2 secondes (le lecteur ne se coupait plus) : seulement quand un titre est terminé
+- La mise à jour automatique de yt-dlp attend la fin d'un téléchargement manuel
+- Petites erreurs serveur corrigées (fichier envoyé laissé dans /tmp, limite de taille des envois, paramètres invalides)
+
 ## [0.24.2] - 2026-10-05
 
 ### Amélioré

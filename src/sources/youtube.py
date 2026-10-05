@@ -181,7 +181,7 @@ class YouTubeSource(BaseSource):
             import yt_dlp
             opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
                     "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
-                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {max_duration or self.max_duration}"), **ytcookies.opts()}
+                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <=? {max_duration or self.max_duration}"), **ytcookies.opts()}
             def hook(d):
                 if d.get("status") == "downloading":
                     tot = d.get("total_bytes") or d.get("total_bytes_estimate")

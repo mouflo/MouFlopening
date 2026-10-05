@@ -399,12 +399,13 @@ async function startEdit(kind, arg) {
     if (!window.MouEditor) return note($('msg'), 'L\'éditeur n\'est pas chargé : recharge la page.', 'err');
     stopPlayers(null);                                  // la vidéo / le son en cours se coupe dès le début de l'édition
     const progress = (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); };
-    let r;
-    if (kind === 'file') { const form = new FormData(); form.append('file', arg); form.append('id', target.id); r = await runJob('/api/edit/stage-file', form, progress); }
-    else r = await runJob('/api/edit/stage', {id: target.id, source: kind, url: arg || ''}, progress);
+    let r; const tgt = target, sel = selected;          // l'édition reste attachée à ce titre
+    if (kind === 'file') { const form = new FormData(); form.append('file', arg); form.append('id', tgt.id); r = await runJob('/api/edit/stage-file', form, progress); }
+    else r = await runJob('/api/edit/stage', {id: tgt.id, source: kind, url: arg || ''}, progress);
     if (r.error) return note($('msg'), r.error, 'err');
+    if (target !== tgt) return;                         // on a changé de titre pendant la préparation
     note($('msg'), ''); stopPlayers(null);
-    MouEditor.open({token: r.token, name: r.name, id: target.id, title: selected.title,
+    MouEditor.open({token: r.token, name: r.name, id: tgt.id, title: sel.title,
         onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; loadLibrary(true); }});
 }
 
@@ -462,10 +463,12 @@ function startYt(b) {
 const blockedVideos = new Set();     // vidéos de ThemerrDB que YouTube refuse de télécharger : on les écarte des propositions
 async function search(full) {
     const title = $('q').value.trim(); if (!title) return;
+    stopCurrentJob();                                    // une seule recherche à la fois : l'ancienne (autre titre) est arrêtée
+    const tgt = target, sel = selected;                  // les résultats appartiennent à CE titre, même si on change de titre entre-temps
     $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), ''); ensureVisible($('cands'));
     const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn, full: full === true, exclude: [...blockedVideos]},
         (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (!done) ensureVisible($('cands')); });
-    if (data.cancelled) return;
+    if (data.cancelled || target !== tgt || selected !== sel) return;      // on est passé à un autre titre : résultats ignorés
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) {
@@ -495,7 +498,7 @@ async function search(full) {
         const t = res[b.dataset.a].themes[b.dataset.t];
         b.disabled = true; b.textContent = '…';
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = true);
-        const r = await runJob('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title, trusted: String(res[b.dataset.a].name).startsWith('★')},
+        const r = await runJob('/api/save', {id: tgt.id, url: t.url || t.audio || t.video, title: sel.title, trusted: String(res[b.dataset.a].name).startsWith('★')},
             (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); });
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = false);
         b.textContent = 'Utiliser';
@@ -543,7 +546,10 @@ async function pollBatch() {
         win.innerHTML = msgs.map(m => `<div>${esc(m)}</div>`).join(''); win.dataset.n = msgs.join('|').length + ':' + msgs.length;
         if (atEnd || !win.dataset.seen) { win.scrollTop = win.scrollHeight; win.dataset.seen = '1'; }
     }
-    if (s.running) { clearTimeout(pollTimer); pollTimer = setTimeout(pollBatch, 2000); loadLibrary(true); }
+    if (s.running) {
+        clearTimeout(pollTimer); pollTimer = setTimeout(pollBatch, 2000);
+        if (window.lastBatchCount !== n) { window.lastBatchCount = n; loadLibrary(true); }    // la liste n'est relue que quand un titre a fini
+    }
     else if (pollTimer) { pollTimer = null; loadLibrary(true); }
 }
 $('batchStart').addEventListener('click', async () => {
@@ -554,7 +560,7 @@ $('batchStart').addEventListener('click', async () => {
     const r = await post('/api/batch/start', {seasons: withSeasons, cat: curCat}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
 });
 $('normStart').addEventListener('click', async () => {
-    if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier data/themes-backup sur le serveur). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;
+    if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier des anciens thèmes, voir Réglages). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;
     const r = await post('/api/normalize/start', {}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
 });
 $('liveClose').addEventListener('click', () => {      // traitement terminé : on retire le résultat (barre verte + fenêtre), il ne reviendra pas au rechargement
