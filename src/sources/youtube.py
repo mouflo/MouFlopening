@@ -113,13 +113,16 @@ class YouTubeSource(BaseSource):
 
     # ------------------------------------------------------------------ téléchargement
 
-    def _yt_download(self, url: str, tmp: str) -> str:
-        """Télécharge l'audio dans tmp ; retourne « » si OK, sinon le message d'erreur."""
+    def _yt_download(self, url: str, tmp: str, clients=None) -> str:
+        """Télécharge l'audio dans tmp ; retourne « » si OK, sinon le message d'erreur.
+        clients : autres « profils » de lecteur YouTube à essayer quand le profil par défaut est refusé."""
         try:
             import yt_dlp
             opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
                     "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
                     "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {self.max_duration}")}
+            if clients:
+                opts["extractor_args"] = {"youtube": {"player_client": list(clients)}}
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.download([url])
             return ""
@@ -135,8 +138,21 @@ class YouTubeSource(BaseSource):
         logger.info("[YouTube] Téléchargement : %s", url)
         with tempfile.TemporaryDirectory() as tmp:
             err = self._yt_download(url, tmp)
-            if err and _looks_outdated(err) and _upgrade_ytdlp():
-                err = self._yt_download(url, tmp)          # une fois, avec la version à jour
+            if err and _looks_outdated(err):
+                if _upgrade_ytdlp():
+                    err = self._yt_download(url, tmp)      # avec la version à jour
+                if err and _looks_outdated(err):           # YouTube refuse parfois un profil de lecteur mais pas les autres
+                    for clients in (("tv", "web_safari"), ("mweb", "ios"), ("web_embedded", "android")):
+                        logger.info("[YouTube] Nouvel essai avec le profil %s", "+".join(clients))
+                        err = self._yt_download(url, tmp, clients)
+                        if not err:
+                            break
+            if err:
+                try:
+                    import yt_dlp
+                    logger.error("[YouTube] (yt-dlp version %s)", yt_dlp.version.__version__)
+                except Exception:
+                    pass
             if err:
                 logger.error("[YouTube] Téléchargement impossible : %s", err)
                 self.last_error = _friendly(err)
@@ -164,7 +180,7 @@ _last_upgrade = 0.0
 def _friendly(err: str) -> str:
     e = err.lower()
     if "not available" in e or "unavailable" in e or "private video" in e or "removed" in e:
-        return "cette vidéo n'est plus disponible sur YouTube (retirée, privée ou bloquée dans ton pays) : choisis-en une autre"
+        return "YouTube refuse ce téléchargement depuis le serveur (la vidéo marche peut-être dans ton navigateur) : réessaie dans quelques minutes ou choisis-en une autre"
     if "sign in" in e or "age" in e and "restrict" in e:
         return "YouTube demande une connexion pour cette vidéo : choisis-en une autre"
     if "403" in e or "forbidden" in e:
@@ -176,7 +192,8 @@ def _friendly(err: str) -> str:
 
 def _looks_outdated(err: str) -> bool:
     e = err.lower()
-    return any(k in e for k in ("403", "forbidden", "sign in to confirm", "unable to extract", "nsig", "signature", "http error 4"))
+    return any(k in e for k in ("403", "forbidden", "sign in to confirm", "unable to extract", "nsig", "signature", "http error 4",
+                                "not available", "unavailable", "requested format", "player response"))
 
 
 def _upgrade_ytdlp() -> bool:

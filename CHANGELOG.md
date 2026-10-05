@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.2] - 2026-10-05
+
+### Corrigé
+- « This video is not available » alors que la vidéo marche dans le navigateur : YouTube refuse certains téléchargements depuis un serveur. L'appli déclenche maintenant la mise à jour de yt-dlp pour ce message aussi, puis réessaie avec d'autres « profils » de lecteur YouTube (tv, safari, mobile…) avant d'abandonner
+- Le message d'échec ne prétend plus que la vidéo est retirée : il dit que YouTube refuse depuis le serveur ; la version de yt-dlp est inscrite dans le Journal pour le diagnostic
+
 ## [0.9.1] - 2026-10-05
 
 ### Corrigé
