@@ -173,3 +173,28 @@ class TestYouTube(unittest.TestCase):
         good = {"title": "Breaking Bad Main Theme", "duration": 60}
         bad = {"title": "Breaking Bad reaction cover", "duration": 900}
         self.assertGreater(y._score("Breaking Bad", good), y._score("Breaking Bad", bad))
+
+
+class TestFsutil(unittest.TestCase):
+    def test_safe_move_ecrase_et_supprime_la_source(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from src.fsutil import safe_move
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            src, dst = Path(a) / "s.mp3", Path(b) / "theme.mp3"
+            src.write_bytes(b"nouveau"); dst.write_bytes(b"ancien")
+            real = os.replace
+            calls = {"n": 0}
+
+            def flaky(x, y):            # le 1er renommage échoue (autre disque), les suivants marchent
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise OSError(18, "Invalid cross-device link")
+                return real(x, y)
+            with mock.patch("os.replace", flaky):
+                safe_move(src, dst)
+            self.assertEqual(dst.read_bytes(), b"nouveau")
+            self.assertFalse(src.exists())
+            self.assertEqual([p.name for p in Path(b).iterdir()], ["theme.mp3"])

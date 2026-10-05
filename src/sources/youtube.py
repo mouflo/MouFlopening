@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..fsutil import safe_move
 from .base_source import BaseSource, ThemeResult
 from ..audio import REFERENCE_DB, convert_to_mp3
 from ..matching import similarity
@@ -123,6 +124,6 @@ class YouTubeSource(BaseSource):
             out = Path(tmp) / "theme.mp3"
             if not convert_to_mp3(files[0], out, self.target_db):
                 return False
-            shutil.move(str(out), str(output_path))
+            safe_move(out, output_path)
         logger.info("[YouTube] ✅ Enregistré : %s", output_path)
         return True

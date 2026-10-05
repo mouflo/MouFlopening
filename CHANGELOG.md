@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.1] - 2026-10-05
+
+### Corrigé
+- La normalisation s'arrêtait sur le NAS (« Operation not permitted » : dates des fichiers non modifiables). Les copies et déplacements passent maintenant par un mode tolérant (copie à côté puis renommage), et un fichier en erreur n'arrête plus tout le lot
+
 ## [0.6.0] - 2026-10-05
 
 ### Modifié

@@ -28,6 +28,7 @@ load_secrets_env()   # identifiants et clé Emby (data/secrets.env), avant l'ini
 
 from src import library
 from src.emby_client import EmbyClient
+from src.fsutil import safe_move
 from src.library import THEME_DIR, THEME_EXTS, THEME_FILENAME, find_theme
 from src.sources.animethemes import AnimeThemesSource
 from src.sources.youtube import YouTubeSource
@@ -112,7 +113,7 @@ def _migrate_old_backups():
         try:
             target = dest / item.name
             if not target.exists():
-                shutil.move(str(item), str(target))
+                safe_move(item, target)
                 logger.info("Sauvegarde déplacée vers le NAS : %s", target)
         except OSError as e:
             logger.warning("Déplacement impossible (%s) : %s", item.name, e)
@@ -130,7 +131,7 @@ def _backup_existing(folder):
         if old.is_file():
             dest = _backup_dir()
             name = f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(folder.parent.name)}_{_slug(folder.name)}{ext}"
-            shutil.move(str(old), str(dest / name))
+            safe_move(old, dest / name)
             logger.info("Ancien thème mis de côté : %s", dest / name)
 
 
@@ -247,8 +248,16 @@ def _run_normalize():
                 with _batch_lock:
                     BATCH["done"] += 1
                 continue
-            with _work_lock:
-                status, before, after = normalize_file(path, TARGET_DB, backup_dir=backup / _slug(label))
+            try:
+                with _work_lock:
+                    status, before, after = normalize_file(path, TARGET_DB, backup_dir=backup / _slug(label))
+            except Exception as e:      # un fichier récalcitrant ne doit pas arrêter tout le lot
+                logger.exception("Normalisation impossible : %s", path)
+                status, before, after = "error", None, None
+                _batch_note(f"❌ {label} — {type(e).__name__} : {e}")
+                with _batch_lock:
+                    BATCH["failed"] += 1
+                continue
             if status == "error":
                 with _batch_lock:
                     BATCH["failed"] += 1

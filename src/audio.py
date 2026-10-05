@@ -70,8 +70,8 @@ def normalize_file(path: Path, target_db: float = REFERENCE_DB, tolerance: float
     « ok » (déjà au bon niveau, non modifié), « done » (normalisé) ou « error ».
     L'original est copié dans backup_dir avant remplacement. Réencodage en qualité maximale (-q:a 0).
     """
-    import shutil
     import tempfile
+    from .fsutil import safe_copy, safe_move
     measured = measure_gain(path)
     if measured is None:
         return "error", None, None
@@ -86,6 +86,6 @@ def normalize_file(path: Path, target_db: float = REFERENCE_DB, tolerance: float
         after = REFERENCE_DB - check[0] if check else None
         if backup_dir is not None:
             backup_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, backup_dir / path.name)
-        shutil.move(str(out), str(path))
+            safe_copy(path, backup_dir / path.name)
+        safe_move(out, path)
     return "done", before, after

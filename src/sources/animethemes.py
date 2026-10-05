@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from ..fsutil import safe_move
 from .base_source import BaseSource, ThemeResult
 from ..audio import REFERENCE_DB, convert_to_mp3
 from ..matching import similarity
@@ -164,7 +165,7 @@ class AnimeThemesSource(BaseSource):
             if not convert_to_mp3(raw, tmp_out, self.target_db):
                 return False
 
-            shutil.move(str(tmp_out), str(output_path))  # fonctionne aussi vers le NAS (autre disque)
+            safe_move(tmp_out, output_path)  # fonctionne aussi vers le NAS (autre disque, dates non modifiables)
 
         logger.info("[AnimeThemes] ✅ Enregistré : %s", output_path)
         return True
