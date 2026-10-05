@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.23.2] - 2026-10-05
+
+### Corrigé
+- Éditeur audio sur téléphone : la courbe du son était écrasée (invisible) quand l'écran était étroit
+
+### Amélioré
+- Éditeur audio refait en plein écran, pensé pour le téléphone : grande courbe centrale en barres (réglée sur le niveau du morceau), règle du temps, poignées bleues avec languettes, boutons − / + pour ajuster le début et la fin à 0,1 s près, zoom ⊖ ⊕, gros bouton Écouter avec « aller au début » et « écouter la fin », fondus d'entrée et de sortie en − / + (0,5 s), bouton ENREGISTRER en haut
+
 ## [0.23.1] - 2026-10-05
 
 ### Corrigé

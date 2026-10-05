@@ -3,25 +3,40 @@
 (function () {
   'use strict';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); };
-  var CSS = '.aed-bg{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:flex;align-items:center;justify-content:center;padding:8px}' +
-    '.aed{background:var(--card,#1c1d20);color:var(--text,#eee);border-radius:10px;width:min(980px,100%);max-height:100%;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}' +
-    '.aed h3{margin:0;font-size:1.05rem;display:flex;justify-content:space-between;gap:8px;align-items:center}' +
-    '.aed .sub{color:var(--muted,#999);font-size:.85rem}' +
-    '.aed-wave{position:relative;background:#101113;border-radius:6px;height:170px;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}' +
-    '.aed-wave canvas{width:100%;height:100%;display:block}' +
-    '.aed-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}' +
-    '.aed-row .b{padding:9px 14px;border:0;border-radius:4px;background:var(--field,#2a2b2f);color:var(--text,#eee);cursor:pointer;font:inherit;font-weight:500}' +
-    '.aed-row .b.go{background:var(--accent,#52b54b);color:#fff;font-weight:600}' +
-    '.aed-row .b:disabled{opacity:.5;cursor:not-allowed}' +
-    '.aed-row label{display:flex;align-items:center;gap:6px;color:var(--muted,#999);font-size:.9rem}' +
-    '.aed-row input[type=number]{width:70px;background:var(--field,#2a2b2f);color:var(--text,#eee);border:1px solid var(--line,#3a3b3f);border-radius:4px;padding:8px;font:inherit}' +
-    '.aed-pan{width:100%;accent-color:var(--accent,#52b54b)}' +
-    '.aed-info{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:.85rem}' +
-    '.aed-info div{background:var(--field,#2a2b2f);border-radius:6px;padding:8px;text-align:center}' +
-    '.aed-info b{display:block;font-size:1rem}' +
-    '.aed-msg{padding:9px 12px;border-radius:4px;font-size:.9rem}' +
-    '.aed-msg.ok{background:rgba(82,181,75,.15);border:1px solid var(--accent,#52b54b)}.aed-msg.err{background:rgba(229,83,75,.15);border:1px solid var(--err,#e5534b)}' +
-    '@media(max-width:700px){.aed{padding:10px}.aed-row .b{flex:1 1 auto}.aed-wave{height:150px}}';
+  var CSS = '.aed-bg{position:fixed;inset:0;background:#080b1f;z-index:200;display:flex;align-items:stretch;justify-content:center}' +
+    '.aed{background:#0a0f2c;color:#eaf0ff;width:min(900px,100%);height:100dvh;max-height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}' +
+    '.aed>*{flex:none}' +
+    '.aed button{background:#16204f;color:#eaf0ff;border:0;border-radius:12px;font:inherit;cursor:pointer;padding:0;box-shadow:none;min-height:0}' +
+    '.aed .aed-top{display:flex;align-items:center;gap:10px;padding:10px 12px}' +
+    '.aed .aed-top .t{flex:1;min-width:0;font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.aed .aed-top .t small{display:block;font-weight:400;font-size:.72rem;color:#8a94c4;overflow:hidden;text-overflow:ellipsis}' +
+    '.aed .aed-ic{background:none;border:0;color:#eaf0ff;font-size:1.5rem;cursor:pointer;padding:6px 10px;line-height:1}' +
+    '.aed .aed-save{background:linear-gradient(135deg,#7a4dff,#2d9cff);color:#fff;border:0;border-radius:6px;padding:10px 16px;font:inherit;font-weight:800;letter-spacing:.03em;cursor:pointer}' +
+    '.aed .aed-save:disabled{opacity:.5}' +
+    '.aed .aed-hint{color:#8a94c4;font-size:.78rem;padding:0 14px 6px;text-align:center}' +
+    '.aed .aed-wave{position:relative;flex:1 1 auto!important;min-height:200px;background:#1a2150;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}' +
+    '.aed .aed-wave canvas{position:absolute;inset:0;width:100%;height:100%;display:block}' +
+    '.aed .aed-pan{width:calc(100% - 28px);margin:6px 14px 0;accent-color:#2d9cff}' +
+    '.aed .aed-steps{display:flex;justify-content:space-between;gap:8px;padding:10px 12px 0}' +
+    '.aed .aed-pill{display:flex;align-items:center;background:#16204f;border-radius:12px;overflow:hidden}' +
+    '.aed .aed-pill button{background:none;border:0;color:#eaf0ff;font-size:1.5rem;width:46px;height:46px;cursor:pointer;line-height:1}' +
+    '.aed .aed-pill button:active{background:#24306e}' +
+    '.aed .aed-pill .v{min-width:74px;text-align:center;font-variant-numeric:tabular-nums;font-size:.95rem}' +
+    '.aed .aed-pill .v small{display:block;font-size:.65rem;color:#8a94c4}' +
+    '.aed .aed-zoom{display:flex;gap:8px;padding:8px 12px 0;align-items:center}' +
+    '.aed .aed-chip{background:#16204f;color:#eaf0ff;border:0;border-radius:18px;padding:10px 16px;font:inherit;font-size:.9rem;cursor:pointer}' +
+    '.aed .aed-zoom .aed-pill button{width:48px;height:44px;font-size:1.2rem;padding:0;overflow:visible}' +
+    '.aed .aed-chip:active{background:#24306e}' +
+    '.aed .aed-dur{margin-left:auto;color:#8a94c4;font-size:.85rem}.aed-dur b{color:#eaf0ff}' +
+    '.aed .aed-transport{display:flex;justify-content:center;align-items:center;gap:34px;padding:10px 0 4px}' +
+    '.aed .aed-round{width:56px;height:56px;border-radius:50%;border:0;background:#16204f;color:#eaf0ff;font-size:1.4rem;cursor:pointer}' +
+    '.aed .aed-round.big{width:72px;height:72px;background:#1e9bff;font-size:1.9rem}' +
+    '.aed .aed-fades{display:flex;gap:10px;justify-content:space-between;padding:8px 12px 12px;background:#16204f;border-radius:16px 16px 0 0;margin-top:6px}' +
+    '.aed .aed-fade{flex:1;text-align:center}.aed-fade .l{font-size:.78rem;color:#b7c0ea;margin-bottom:4px}' +
+    '.aed .aed-fade .aed-pill{background:#0a0f2c;justify-content:center}' +
+    '.aed .aed-fade input{width:44px;background:none;border:0;color:#eaf0ff;text-align:center;font:inherit;font-size:1rem;padding:0}' +
+    '.aed .aed-msg{margin:6px 12px 0;padding:9px 12px;border-radius:8px;font-size:.88rem}.aed-msg.ok{background:rgba(82,181,75,.18);border:1px solid #52b54b}.aed-msg.err{background:rgba(229,83,75,.18);border:1px solid #e5534b}' +
+    '@media(min-width:900px){.aed{height:min(100dvh,760px);margin:auto;border-radius:12px}}';
 
   function fmt(t) { t = Math.max(0, t); var m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); }
 
@@ -37,17 +52,18 @@
     if (!document.getElementById('aedCss')) { var st = document.createElement('style'); st.id = 'aedCss'; st.textContent = CSS; document.head.appendChild(st); }
     var bg = document.createElement('div'); bg.className = 'aed-bg';
     bg.innerHTML = '<div class="aed" role="dialog" aria-label="Éditeur audio">' +
-      '<h3><span>✂️ Éditer le thème <span class="sub">· ' + esc(opt.name || '') + '</span></span><button class="b" id="aedX" style="background:none;border:0;color:inherit;font-size:1.3rem;cursor:pointer" aria-label="Fermer">✕</button></h3>' +
-      '<div class="sub">Glisse la courbe pour la faire défiler, pince ou utilise ➕ ➖ pour zoomer, touche la courbe pour placer la lecture, tire les poignées <b style="color:#52b54b">verte</b> (début) et <b style="color:#e5534b">rouge</b> (fin). La partie hors des poignées est coupée.</div>' +
+      '<div class="aed-top"><button class="aed-ic" id="aedX" aria-label="Fermer">←</button><div class="t">Éditer le thème<small>' + esc(opt.name || '') + '</small></div><button class="aed-save" id="aedSave">ENREGISTRER</button></div>' +
+      '<div class="aed-hint">Tire les poignées · touche la courbe pour placer la lecture · pince pour zoomer</div>' +
       '<div class="aed-wave" id="aedWave"><canvas id="aedCv"></canvas></div>' +
       '<input class="aed-pan" id="aedPan" type="range" min="0" max="1000" value="0" aria-label="Défilement">' +
-      '<div class="aed-info"><div>Début<b id="aedS">0:00.00</b></div><div>Fin<b id="aedE">0:00.00</b></div><div>Durée gardée<b id="aedD">0:00.00</b></div></div>' +
-      '<div class="aed-row"><button class="b go" id="aedPlay">▶ Écouter</button><button class="b" id="aedSetS">⏮ Début ici</button><button class="b" id="aedSetE">Fin ici ⏭</button>' +
-      '<button class="b" id="aedZo" aria-label="Dézoomer">➖</button><button class="b" id="aedZi" aria-label="Zoomer">➕</button><button class="b" id="aedFit">↔ Tout voir</button></div>' +
-      '<div class="aed-row"><label>Fondu d\'entrée <input type="number" id="aedFi" min="0" max="20" step="0.5" value="0"> s</label><label>Fondu de sortie <input type="number" id="aedFo" min="0" max="20" step="0.5" value="0"> s</label></div>' +
+      '<div class="aed-steps"><div class="aed-pill"><button data-st="s-" aria-label="Début −0,1 s">−</button><div class="v"><span id="aedS">0:00.00</span><small>début</small></div><button data-st="s+" aria-label="Début +0,1 s">+</button></div>' +
+      '<div class="aed-pill"><button data-st="e-" aria-label="Fin −0,1 s">−</button><div class="v"><span id="aedE">0:00.00</span><small>fin</small></div><button data-st="e+" aria-label="Fin +0,1 s">+</button></div></div>' +
+      '<div class="aed-zoom"><button class="aed-chip" id="aedSetS">⏮ Début ici</button><button class="aed-chip" id="aedSetE">Fin ici ⏭</button><div class="aed-pill"><button id="aedZo" aria-label="Dézoomer">⊖</button><button id="aedZi" aria-label="Zoomer">⊕</button></div></div>' +
+      '<div class="aed-zoom" style="padding-top:4px"><button class="aed-chip" id="aedFit">↔ Tout voir</button><div class="aed-dur">Durée gardée <b id="aedD">0:00.00</b></div></div>' +
+      '<div class="aed-transport"><button class="aed-round" id="aedToS" aria-label="Aller au début">⏮</button><button class="aed-round big" id="aedPlay" aria-label="Écouter">▶</button><button class="aed-round" id="aedToE" aria-label="Écouter la fin">⏭</button></div>' +
       '<div id="aedMsg"></div>' +
-      '<div class="aed-row"><button class="b go" id="aedSave">💾 Enregistrer ce thème</button><button class="b" id="aedCancel">Annuler</button></div>' +
-      '<div class="sub">Le thème en place n\'est remplacé qu\'à l\'enregistrement (l\'ancien est mis de côté, pas supprimé) ; le volume est remis au niveau habituel.</div></div>';
+      '<div class="aed-fades"><div class="aed-fade"><div class="l">Fondu d\'entrée</div><div class="aed-pill"><button data-fd="i-">−</button><input type="number" id="aedFi" min="0" max="20" step="0.5" value="0" inputmode="decimal"><span>s</span><button data-fd="i+">+</button></div></div>' +
+      '<div class="aed-fade"><div class="l">Fondu de sortie</div><div class="aed-pill"><button data-fd="o-">−</button><input type="number" id="aedFo" min="0" max="20" step="0.5" value="0" inputmode="decimal"><span>s</span><button data-fd="o+">+</button></div></div></div></div>';
     document.body.appendChild(bg);
     var $ = function (id) { return bg.querySelector('#' + id); };
     var cv = $('aedCv'), wave = $('aedWave'), ctx = cv.getContext('2d');
@@ -57,7 +73,7 @@
 
     function close() { cancelAnimationFrame(S.raf); audio.pause(); audio.src = ''; document.removeEventListener('keydown', onKey); bg.remove(); document.body.style.overflow = ''; }
     document.body.style.overflow = 'hidden';
-    $('aedX').onclick = $('aedCancel').onclick = close;
+    $('aedX').onclick = close;
     function msg(t, kind) { $('aedMsg').innerHTML = t ? '<div class="aed-msg ' + (kind || 'ok') + '">' + esc(t) + '</div>' : ''; }
 
     function span() { return W / S.pps; }
@@ -75,42 +91,49 @@
     function draw() {
       if (!S.peaks) return;
       ctx.clearRect(0, 0, W, H);
-      var mid = H / 2, amp = H / 2 - 6, p = S.peaks, bps = S.bps;
-      // courbe
-      ctx.fillStyle = '#4a9fd5';
-      for (var x = 0; x < W; x++) {
-        var t0 = S.view + x / S.pps, t1 = t0 + 1 / S.pps;
-        var b0 = Math.floor(t0 * bps), b1 = Math.max(b0, Math.ceil(t1 * bps) - 1), mn = 127, mx = -127;
-        if (b0 * 2 >= p.length) break;
-        for (var b = b0; b <= b1 && b * 2 < p.length; b++) { if (p[b * 2] < mn) mn = p[b * 2]; if (p[b * 2 + 1] > mx) mx = p[b * 2 + 1]; }
-        var y0 = mid - (mx / 127) * amp, y1 = mid - (mn / 127) * amp;
-        ctx.fillRect(x, y0, 1, Math.max(1, y1 - y0));
-      }
-      // repères de temps
-      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.font = '11px sans-serif';
-      var step = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300].find(function (s) { return s * S.pps >= 70; }) || 600;
-      for (var tt = Math.ceil(S.view / step) * step; tt < S.view + span(); tt += step) { var xx = xOf(tt); ctx.fillRect(xx, H - 14, 1, 14); ctx.fillText(fmt(tt).replace(/\.00$/, ''), xx + 3, H - 3); }
-      // parties coupées
-      ctx.fillStyle = 'rgba(0,0,0,.62)';
+      var top = 22, bot = 40, mid = top + (H - top - bot) / 2, amp = (H - top - bot) / 2 - 4, p = S.peaks, bps = S.bps;
       var xs = xOf(S.start), xe = xOf(S.end);
-      if (xs > 0) ctx.fillRect(0, 0, Math.min(W, xs), H);
-      if (xe < W) ctx.fillRect(Math.max(0, xe), 0, W - Math.max(0, xe), H);
+      // zone gardée plus claire
+      ctx.fillStyle = 'rgba(120,150,255,.14)'; ctx.fillRect(Math.max(0, xs), top, Math.min(W, xe) - Math.max(0, xs), H - top - bot);
+      // barres du son
+      var barW = 3, gain = 127 / Math.max(S.peak || 127, 20);
+      for (var x = 0; x < W; x += barW) {
+        var t0 = S.view + x / S.pps, t1 = t0 + barW / S.pps;
+        var b0 = Math.floor(t0 * bps), b1 = Math.max(b0, Math.ceil(t1 * bps) - 1), mx = 0;
+        if (b0 * 2 >= p.length) break;
+        for (var b = b0; b <= b1 && b * 2 < p.length; b++) { var a1 = Math.max(Math.abs(p[b * 2]), Math.abs(p[b * 2 + 1])); if (a1 > mx) mx = a1; }
+        var h = Math.max(2, Math.min(1, (mx / 127) * gain) * amp);
+        var inside = (x + 1) >= xs && (x + 1) <= xe;
+        ctx.fillStyle = inside ? '#35a7ff' : '#4a5688';
+        ctx.fillRect(x, mid - h, 2, h * 2);
+      }
+      // règle des temps (en haut)
+      ctx.fillStyle = 'rgba(200,210,255,.55)'; ctx.font = '11px sans-serif';
+      var step = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300].find(function (s) { return s * S.pps >= 70; }) || 600;
+      for (var tt = Math.ceil(S.view / step) * step; tt < S.view + span(); tt += step) { var xx = xOf(tt); ctx.fillRect(xx, 14, 1, 8); ctx.fillText(fmt(tt).replace(/\.00$/, ''), xx + 3, 11); }
+      // parties coupées assombries
+      ctx.fillStyle = 'rgba(8,11,31,.62)';
+      if (xs > 0) ctx.fillRect(0, top, Math.min(W, xs), H - top - bot);
+      if (xe < W) ctx.fillRect(Math.max(0, xe), top, W - Math.max(0, xe), H - top - bot);
       // fondus (enveloppe)
       var fi = parseFloat($('aedFi').value) || 0, fo = parseFloat($('aedFo').value) || 0;
-      ctx.strokeStyle = 'rgba(255,214,102,.9)'; ctx.lineWidth = 1.5;
-      if (fi > 0) { ctx.beginPath(); ctx.moveTo(xs, H - 8); ctx.lineTo(xOf(S.start + fi), 8); ctx.stroke(); }
-      if (fo > 0) { ctx.beginPath(); ctx.moveTo(xOf(S.end - fo), 8); ctx.lineTo(xe, H - 8); ctx.stroke(); }
-      // poignées
-      handle(xs, '#52b54b'); handle(xe, '#e5534b');
+      ctx.strokeStyle = 'rgba(255,214,102,.95)'; ctx.lineWidth = 2;
+      if (fi > 0) { ctx.beginPath(); ctx.moveTo(xs, H - bot); ctx.lineTo(xOf(S.start + fi), top + 6); ctx.stroke(); }
+      if (fo > 0) { ctx.beginPath(); ctx.moveTo(xOf(S.end - fo), top + 6); ctx.lineTo(xe, H - bot); ctx.stroke(); }
+      // poignées : trait + languette en bas
+      handle(xs, '#2d9cff', -1); handle(xe, '#2d9cff', 1);
       // lecture
-      var xh = xOf(S.head); if (xh >= 0 && xh <= W) { ctx.fillStyle = '#fff'; ctx.fillRect(xh - 1, 0, 2, H); }
+      var xh = xOf(S.head); if (xh >= 0 && xh <= W) { ctx.fillStyle = '#ff9d2e'; ctx.fillRect(xh - 1, top, 2, H - top - bot); ctx.beginPath(); ctx.arc(xh, top, 5, 0, 6.3); ctx.fill(); }
       $('aedS').textContent = fmt(S.start); $('aedE').textContent = fmt(S.end); $('aedD').textContent = fmt(S.end - S.start);
       var pan = $('aedPan'), room = S.dur - span(); pan.disabled = room <= 0.01; pan.value = room > 0 ? Math.round(1000 * S.view / room) : 0;
     }
-    function handle(x, color) {
-      if (x < -20 || x > W + 20) return;
-      ctx.fillStyle = color; ctx.fillRect(x - 1.5, 0, 3, H);
-      ctx.beginPath(); ctx.arc(x, 14, 9, 0, 6.3); ctx.fill();
+    function handle(x, color, dir) {
+      if (x < -30 || x > W + 30) return;
+      var top = 22, bot = 40;
+      ctx.fillStyle = color; ctx.fillRect(x - 1.5, top, 3, H - top - bot + 18);
+      var w = 30, h = 36, y = H - bot - 4, x0 = dir < 0 ? x - w : x;          // languette : à gauche du trait pour le début, à droite pour la fin
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y, w, h, 8) : ctx.rect(x0, y, w, h); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(dir < 0 ? '‹' : '›', x0 + w / 2, y + 27); ctx.textAlign = 'start';
     }
 
     function zoom(f, center) {
@@ -121,6 +144,13 @@
     $('aedFit').onclick = function () { S.pps = S.minPps; S.view = 0; draw(); };
     $('aedPan').oninput = function () { var room = S.dur - span(); S.view = room > 0 ? room * this.value / 1000 : 0; draw(); };
     $('aedFi').oninput = $('aedFo').oninput = draw;
+    bg.querySelectorAll('[data-st]').forEach(function (b) { b.onclick = function () {
+      var k = b.dataset.st, d = k[1] === '+' ? 0.1 : -0.1;
+      if (k[0] === 's') S.start = Math.max(0, Math.min(S.end - 0.5, S.start + d)); else S.end = Math.min(S.dur, Math.max(S.start + 0.5, S.end + d));
+      S.head = S.start; draw(); }; });
+    bg.querySelectorAll('[data-fd]').forEach(function (b) { b.onclick = function () {
+      var k = b.dataset.fd, el = k[0] === 'i' ? $('aedFi') : $('aedFo'), v = (parseFloat(el.value) || 0) + (k[1] === '+' ? 0.5 : -0.5);
+      el.value = Math.max(0, Math.min(20, Math.round(v * 2) / 2)); draw(); }; });
     wave.addEventListener('wheel', function (e) { e.preventDefault(); var r = wave.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.25 : 0.8, tOf(e.clientX - r.left)); }, {passive: false});
 
     // ----- doigt / souris : poignées, défilement, lecture, pincement -----
@@ -131,7 +161,7 @@
       var ids = Object.keys(ptrs);
       if (ids.length === 2) { pinch = {d: Math.abs(ptrs[ids[0]].x - ptrs[ids[1]].x) || 1, pps: S.pps}; drag = null; return; }
       var ds = Math.abs(x - xOf(S.start)), de = Math.abs(x - xOf(S.end));
-      if (Math.min(ds, de) < 18) drag = {kind: ds <= de ? 'start' : 'end'};
+      if (Math.min(ds, de) < 26 || (e.clientY - r.top > H - 60 && Math.min(ds, de) < 44)) drag = {kind: ds <= de ? 'start' : 'end'};
       else drag = {kind: 'pan', x0: x, view0: S.view, moved: false};
     });
     wave.addEventListener('pointermove', function (e) {
@@ -159,7 +189,7 @@
     wave.addEventListener('pointerup', up); wave.addEventListener('pointercancel', up);
 
     // ----- lecture de la partie gardée (avec aperçu des fondus) -----
-    function setPlaying(on) { S.playing = on; $('aedPlay').textContent = on ? '⏸ Pause' : '▶ Écouter'; if (!on) { audio.pause(); cancelAnimationFrame(S.raf); audio.volume = 1; } }
+    function setPlaying(on) { S.playing = on; $('aedPlay').textContent = on ? '⏸' : '▶'; if (!on) { audio.pause(); cancelAnimationFrame(S.raf); audio.volume = 1; } }
     function tick() {
       if (!S.playing) return;
       var t = audio.currentTime; S.head = t;
@@ -176,6 +206,8 @@
       if (S.head < S.start || S.head >= S.end - 0.05) S.head = S.start;
       audio.currentTime = S.head; audio.play().then(function () { setPlaying(true); tick(); }).catch(function () { msg('La lecture a été refusée par le navigateur : réessaie.', 'err'); });
     };
+    $('aedToS').onclick = function () { setPlaying(false); S.head = S.start; audio.currentTime = S.start; S.view = Math.max(0, S.start - span() * 0.1); clampView(); draw(); };
+    $('aedToE').onclick = function () { setPlaying(false); S.head = Math.max(S.start, S.end - 4); audio.currentTime = S.head; S.view = S.end - span() * 0.9; clampView(); draw(); $('aedPlay').click(); };
     $('aedSetS').onclick = function () { if (S.head < S.end - 0.5) { S.start = S.head; draw(); } else msg('Le début doit être avant la fin.', 'err'); };
     $('aedSetE').onclick = function () { if (S.head > S.start + 0.5) { S.end = S.head; draw(); } else msg('La fin doit être après le début.', 'err'); };
     function onKey(e) { if (e.key === 'Escape') close(); else if (e.key === ' ' && e.target.tagName !== 'INPUT') { e.preventDefault(); $('aedPlay').click(); } }
@@ -208,7 +240,7 @@
       msg('Chargement de la courbe…', 'ok');
       var d = await api('/api/edit/' + opt.token + '/peaks');
       if (d.error) return msg(d.error, 'err');
-      S.dur = d.duration; S.bps = d.bins_per_sec; S.peaks = d.peaks; S.start = 0; S.end = d.duration; S.head = 0;
+      S.dur = d.duration; S.bps = d.bins_per_sec; S.peaks = d.peaks; S.peak = 0; for (var i = 0; i < d.peaks.length; i++) { var q = Math.abs(d.peaks[i]); if (q > S.peak) S.peak = q; } S.start = 0; S.end = d.duration; S.head = 0;
       msg(''); S.pps = 0; resize(); S.pps = S.minPps; draw();
     })();
   }
