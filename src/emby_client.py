@@ -53,7 +53,7 @@ class EmbyClient:
         for term in dict.fromkeys(t for t in [re.sub(r"\(\d{4}\)\s*$", "", folder_name).strip(), *titles] if t):
             data = self._request("GET", "/Items", params={
                 "Recursive": "true", "IncludeItemTypes": item_type, "SearchTerm": term,
-                "Fields": "Path,OriginalTitle", "Limit": 30}).json()
+                "Fields": "Path,OriginalTitle,ProviderIds", "Limit": 30}).json()
             for item in data.get("Items", []) if isinstance(data, dict) else []:
                 parts = re.split(r"[\\/]", item.get("Path") or "")
                 if folder_name in parts and (not parent or parent in parts):   # parent : distingue « Films HD » de « Films 4K »
@@ -77,6 +77,24 @@ class EmbyClient:
         if not orig:
             return "", f"Emby n'a pas de titre original pour « {item.get('Name') or folder_name} »"
         return orig, ""
+
+    def tmdb_id(self, folder_name: str, title: str = "", kind: str = "series", parent: str = "") -> Tuple[int, str]:
+        """(identifiant TheMovieDB déjà connu d'Emby, remarque). 0 si Emby ne l'a pas : c'est la correspondance la plus sûre (pas de titre à deviner)."""
+        if not self.configured:
+            return 0, "Emby n'est pas configuré"
+        try:
+            item = self._find_series(folder_name, [title], "Movie" if kind == "movie" else "Series", parent)
+        except Exception as e:
+            return 0, f"Emby ne répond pas ({e})"
+        if not item:
+            return 0, "titre introuvable dans Emby"
+        ids = {k.lower(): v for k, v in (item.get("ProviderIds") or {}).items()}
+        try:
+            tid = int(ids.get("tmdb") or 0)
+        except (TypeError, ValueError):
+            tid = 0
+        logger.info("[Emby] « %s » → identifiant TheMovieDB %s", folder_name, tid or "(inconnu)")
+        return tid, ("" if tid else "Emby n'a pas d'identifiant TheMovieDB pour ce titre")
 
     def _refresh_item(self, item_id: str) -> None:
         mode = os.getenv("EMBY_REFRESH_MODE", "ValidationOnly")

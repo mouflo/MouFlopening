@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.16.0] - 2026-10-05
+
+### Amélioré
+- La recherche du thème validé par la communauté (ThemerrDB) se fait maintenant d'abord avec le **titre original** : l'identifiant TheMovieDB est pris chez Emby quand il le connaît (correspondance exacte, rien à deviner), sinon retrouvé d'après le titre original (la plupart des films sont américains et la base les connaît sous ce nom), et en dernier recours d'après le titre du dossier. Valable pour la recherche à la main comme pour le téléchargement de tous les thèmes manquants (qui ne prend toujours que les thèmes validés, sans aucun choix sur YouTube)
+- Les étapes de cette recherche s'affichent en direct dans la progression
+
 ## [0.15.1] - 2026-10-05
 
 ### Amélioré

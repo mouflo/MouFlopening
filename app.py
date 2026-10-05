@@ -289,15 +289,43 @@ def original_title_for(series, title, kind):
 
 
 def themerr_for(series, kind):
-    """Thème choisi par la base ThemerrDB (films et séries, via l'identifiant TheMovieDB). -> ({"title","video_id"} ou None, remarque)"""
+    """Thème choisi par la base ThemerrDB (films et séries, via l'identifiant TheMovieDB).
+    L'identifiant est cherché d'abord avec la correspondance la plus sûre : celui qu'Emby connaît déjà ; sinon d'après le TITRE ORIGINAL
+    (la plupart des films sont américains, la base les connaît sous ce titre), puis d'après le titre du dossier.
+    -> ({"title","video_id"} ou None, remarque)"""
     if kind == "anime":
         return None, ""
     from src import title_lookup
     from src.sources import themerrdb
-    tid, why = title_lookup.tmdb_id(series.name, library.clean_title(series.name), kind, os.getenv("TMDB_API_KEY", "").strip())
-    if not tid:
-        return None, why
-    return themerrdb.lookup(kind, tid)
+    key = os.getenv("TMDB_API_KEY", "").strip()
+    clean = library.clean_title(series.name)
+    ids, why = [], ""
+    progress.say("Identifiant TheMovieDB : recherche dans Emby…")
+    tid, w = EMBY.tmdb_id(series.name, clean, kind, series.parent.name)
+    if tid:
+        ids.append(tid)
+    else:
+        why = w
+        progress.say("Titre original (Emby, puis TheMovieDB)…")
+        orig, w2 = original_title_for(series, clean, kind)
+        for cand in ([orig] if orig else []) + [clean]:
+            progress.say(f"Identifiant TheMovieDB : recherche de « {cand} »…")
+            t, w3 = title_lookup.tmdb_id(series.name, cand, kind, key)
+            if t and t not in ids:
+                ids.append(t)
+            elif not t:
+                why = w3
+            if ids and cand == orig:        # le titre original a donné une réponse : on ne devine pas plus loin
+                break
+    if not ids:
+        return None, why or "identifiant TheMovieDB introuvable"
+    last = ""
+    for tid in ids:
+        progress.say(f"ThemerrDB : thème pour l'identifiant {tid}…")
+        tr, last = themerrdb.lookup(kind, tid)
+        if tr:
+            return tr, ""
+    return None, last
 
 
 def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
