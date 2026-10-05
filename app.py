@@ -260,6 +260,7 @@ def _download_replace(source, url, folder, trusted=False, forbid_same_as=None, a
             pass
     progress.say("Mise en place du thème (l'ancien est mis de côté)…")
     try:
+        _maybe_trim(tmp)
         _install_theme(tmp, folder)
     except OSError as e:
         logger.error("Mise en place impossible dans %s : %s", folder, e)
@@ -324,12 +325,26 @@ def _run_batch(limit, with_seasons, cat=0, fresh=True):
             BATCH.update(running=False, current="")
 
 
+def _nas_problem(roots):
+    """Dossiers de médiathèque absents ou non modifiables (partage réseau non monté…) -> texte, ou '' si tout va bien."""
+    bad = [str(r) for r in roots if not (os.path.isdir(r) and os.access(r, os.W_OK))]
+    return ", ".join(bad)
+
+
 def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
     roots = list(CATS[cat]["paths"])
+    bad = _nas_problem(roots)
+    if bad:                                     # NAS non monté : on s'arrête tout de suite, aucun titre n'est mis de côté
+        with _batch_lock:
+            BATCH.update(kind="download", running=True, total=0, done=0, failed=0, current="")
+            if fresh:
+                BATCH["messages"] = []
+        _batch_note(f"⚠️ Partage réseau inaccessible : {bad} — lot arrêté, rien n'a été touché")
+        return {"kind": kind, "added": [], "failed": 0, "failures": [], "nas_error": bad}
     todo = [("film" if kind == "movie" else "série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
     if with_seasons and kind == "anime":          # films et séries : seul ThemerrDB est accepté, et il ne connaît pas les saisons
         todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
-    sk = skipped.all_keys()
+    sk = skipped.all_keys(nightly.settings().get("retry_days", 30))     # au-delà de N jours, les titres mis de côté sont retentés
     n_all = len(todo)
     todo = [t for t in todo if str(t[2]) not in sk]          # les titres déjà recherchés sans résultat sont laissés de côté
     n_skip = n_all - len(todo)
@@ -339,7 +354,7 @@ def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
         BATCH.update(kind="download", running=True, total=len(todo), done=0, failed=0, current="")
         if fresh:
             BATCH["messages"] = []
-    n_failed = 0
+    n_failed, failures = 0, []
     _batch_note(("" if fresh else f"— {CATS[cat]['name']} — ") + f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)")
                 + (f" · {n_skip} mis de côté (déjà cherchés sans résultat) ignoré(s)" if n_skip else ""))
     if True:
@@ -354,15 +369,16 @@ def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
             if ok:
                 skipped.remove(folder)
             elif kind == "anime" and not msg.startswith(TRANSIENT):   # panne passagère : pas mis de côté. Films et séries : « pas dans ThemerrDB » ne veut pas dire « introuvable » (recherche à la main possible)
-                skipped.add(folder)
+                skipped.add(folder, msg)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
             if ok:
                 added_titles.append(label)
             else:
                 n_failed += 1
+                failures.append((label, msg))
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
-    return {"kind": kind, "added": added_titles, "failed": n_failed}
+    return {"kind": kind, "added": added_titles, "failed": n_failed, "failures": failures}
 
 
 def year_of(name):
@@ -466,6 +482,17 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
 
 def _run_normalize():
     """Ramène à TARGET_DB tous les theme.mp3 déjà présents (originaux copiés dans le dossier des anciens thèmes)."""
+    try:
+        _run_normalize_inner()
+    except Exception:                    # ex. NAS qui décroche pendant le parcours : le lot ne reste jamais bloqué « en cours »
+        logger.exception("La normalisation s'est arrêtée sur une erreur")
+        _batch_note("⚠️ Erreur inattendue (détails dans le Journal)")
+    finally:
+        with _batch_lock:
+            BATCH.update(running=False, current="")
+
+
+def _run_normalize_inner():
     from src.audio import normalize_file
     files = []
     skipped_other = 0
@@ -481,6 +508,12 @@ def _run_normalize():
                 files.append((f"{library.clean_title(series.name)} — {label}", theme))
             else:
                 skipped_other += 1
+    bad = _nas_problem(ROOTS)
+    if bad:
+        with _batch_lock:
+            BATCH.update(kind="normalize", running=True, total=0, done=0, failed=0, current="", messages=[])
+        _batch_note(f"⚠️ Partage réseau inaccessible : {bad} — normalisation arrêtée, rien n'a été touché")
+        return
     registry = _read_registry()
     backup = _backup_dir() / "normalisation" / f"{datetime.now():%Y%m%d-%H%M%S}"
     with _batch_lock:
@@ -566,13 +599,21 @@ def index():
 @app.route("/api/library")
 def api_library():
     items = library.list_library(ROOTS)
-    sk = skipped.all_keys()
+    sk = skipped.entries()
+
+    def why(key):
+        e = sk.get(key) or {}
+        return (f"mis de côté le {e['date'][8:10]}/{e['date'][5:7]}/{e['date'][:4]}" if e.get("date") else "mis de côté") + (f" : {e['reason']}" if e.get("reason") else "")
     for it in items:
         root = int(it["id"].split("/")[0])
         base = Path(ROOTS[root]) / it["name"]
         it["skipped"] = (not it["has_theme"]) and str(base) in sk
+        if it["skipped"]:
+            it["skip_why"] = why(str(base))
         for se in it["seasons"]:
             se["skipped"] = (not se["has_theme"]) and str(base / se["name"]) in sk
+            if se["skipped"]:
+                se["skip_why"] = why(str(base / se["name"]))
         it["cat"] = ROOT_CAT[root]
         it["origin"] = Path(ROOTS[root]).name      # dossier d'origine (utile quand un onglet regroupe Films HD et Films 4K)
     cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": c["ok"], "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
@@ -642,7 +683,7 @@ def _search_work(body):
             results.append(r)
     progress.say("Classement des résultats…")
     if not results and folder:
-        skipped.add(folder)             # rien trouvé : mis de côté, pour ne plus le voir dans la liste « sans thème »
+        skipped.add(folder, "recherche sans résultat")             # rien trouvé : mis de côté, pour ne plus le voir dans la liste « sans thème »
     results.sort(key=lambda r: -int(r.get("score") or 0))     # la sélection ThemerrDB (score 100) reste en tête
     return {"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note,
             "skipped": bool(not results and folder)}, 200
@@ -747,7 +788,7 @@ def _custom_url_work(data):
     return {"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]}, 200
 
 
-def _custom_file_work(item_id, title, tmp_src, original_name):
+def _custom_file_work(item_id, title, tmp_src, original_name, trim=True):
     from src.audio import convert_to_mp3
     folder, series, number = library.resolve_target(ROOTS, item_id)
     try:
@@ -767,6 +808,8 @@ def _custom_file_work(item_id, title, tmp_src, original_name):
                 _clear_partials(folder)
                 try:
                     safe_move(out, tmp)
+                    if trim:
+                        _maybe_trim(tmp)
                     progress.say("Mise en place du thème (l'ancien est mis de côté)…")
                     _install_theme(tmp, folder)
                 except OSError as e:
@@ -919,7 +962,7 @@ def _edit_save_work(token, item_id, title, start, end, fade_in, fade_out):
     if not audioedit.render(src, Path(tmp), start, end, fade_in, fade_out):
         os.unlink(tmp)
         return {"error": "La découpe a échoué (détails : bouton Journal)"}, 502
-    res = _custom_file_work(item_id, title, tmp, f"édité ({end - start:.1f} s)")      # conversion, volume, mise en place, Emby (supprime tmp)
+    res = _custom_file_work(item_id, title, tmp, f"édité ({end - start:.1f} s)", trim=False)      # déjà coupé à la main ; conversion, volume, mise en place, Emby (supprime tmp)
     if res[1] == 200:
         for ext in ("mp3", "json"):
             try:
@@ -967,13 +1010,29 @@ def api_duplicates_fix():
     return jsonify({"ok": True, "count": n})
 
 
+@app.route("/api/skipped/retry", methods=["POST"])
+def api_skipped_retry():
+    """« Réessayer les mis de côté » d'un onglet : ils reviennent dans « sans thème » et seront recherchés au prochain lot."""
+    try:
+        cat = int((request.get_json(silent=True) or {}).get("cat", 0))
+        roots = CATS[cat]["paths"]
+    except (ValueError, IndexError, TypeError):
+        return jsonify({"error": "Médiathèque inconnue"}), 400
+    n = skipped.clear_under(roots)
+    logger.info("Mis de côté remis à chercher (%s) : %d", CATS[cat]["name"], n)
+    return jsonify({"ok": True, "count": n})
+
+
 @app.route("/api/skip", methods=["POST"])
 def api_skip():
     data = request.get_json(silent=True) or {}
     folder, _series, _n = library.resolve_target(ROOTS, data.get("id", ""))
     if not folder:
         return jsonify({"error": "Série ou saison introuvable"}), 404
-    (skipped.add if data.get("skip", True) else skipped.remove)(folder)
+    if data.get("skip", True):
+        skipped.add(folder, "mis de côté à la main")
+    else:
+        skipped.remove(folder)
     return jsonify({"ok": True})
 
 
@@ -1017,6 +1076,85 @@ def api_theme():
     if not path:
         return jsonify({"error": "Pas de thème"}), 404
     return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "audio/mpeg", conditional=True)
+
+
+# ---------- anciens thèmes : écouter, restaurer ----------
+_BACKUP_RE = re.compile(r"^(\d{8})-(\d{6})_(.+)\.mp3$")
+
+
+def _backups_of(folder):
+    """Anciens thèmes MP3 de ce dossier dans le dossier des anciens thèmes, du plus récent au plus ancien."""
+    key = f"{_slug(folder.parent.name)}_{_slug(folder.name)}"
+    out = []
+    try:
+        for f in _backup_dir().iterdir():
+            m = _BACKUP_RE.match(f.name)
+            rest = m.group(3) if m else ""          # « <clé> » ou « <clé>_2 » (deux sauvegardes dans la même seconde)
+            if m and (rest == key or (rest.startswith(key + "_") and rest[len(key) + 1:].isdigit())) and f.is_file():
+                d, t = m.group(1), m.group(2)
+                out.append({"name": f.name, "date": f"{d[6:8]}/{d[4:6]}/{d[:4]} {t[:2]}:{t[2:4]}", "size": f.stat().st_size, "sort": f.name})
+    except OSError:
+        pass
+    out.sort(key=lambda b: b["sort"], reverse=True)
+    return out
+
+
+@app.route("/api/backups")
+def api_backups():
+    folder = library.resolve_folder(ROOTS, request.args.get("id", ""))
+    if not folder:
+        return jsonify({"error": "Série ou saison introuvable"}), 404
+    return jsonify({"backups": _backups_of(folder)})
+
+
+@app.route("/api/backups/file")
+def api_backup_file():
+    name = Path(request.args.get("name", "")).name                 # jamais de chemin : seulement un nom du dossier des anciens thèmes
+    if not _BACKUP_RE.match(name):
+        return jsonify({"error": "Fichier inconnu"}), 404
+    path = _backup_dir() / name
+    if not path.is_file():
+        return jsonify({"error": "Fichier introuvable"}), 404
+    return send_file(path, mimetype="audio/mpeg", conditional=True)
+
+
+def _restore_work(item_id, name, title):
+    folder, series, number = library.resolve_target(ROOTS, item_id)
+    if not folder:
+        return {"error": "Série ou saison introuvable"}, 404
+    if not any(b["name"] == name for b in _backups_of(folder)):          # seulement un ancien thème de CE titre
+        return {"error": "Cet ancien thème n'appartient pas à ce titre"}, 400
+    src = _backup_dir() / name
+    if _work_lock.locked():
+        progress.say("En attente : un autre traitement est en cours…")
+    with _work_lock:
+        progress.say("Remise en place de l'ancien thème (l'actuel est mis de côté)…")
+        tmp = folder / "theme.nouveau.partiel"
+        _clear_partials(folder)
+        try:
+            safe_copy(src, tmp)                    # COPIE : l'ancien thème reste aussi dans les anciens thèmes
+            _install_theme(tmp, folder)
+        except OSError as e:
+            logger.error("Restauration impossible dans %s : %s", folder, e)
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            return {"error": "Thème non restauré : " + _write_problem(folder, e) + ". Le thème actuel est conservé."}, 502
+        from src import dupes
+        dupes.remember_source(SOURCES_FILE, folder, "restauré : " + name)
+        progress.say("Mise à jour d'Emby…")
+        emby = EMBY.refresh_series(series.name, title, number, kind_of(item_id), series.parent.name)
+    logger.info("Ancien thème restauré (%s) : %s", name, folder / THEME_FILENAME)
+    skipped.remove(folder)
+    return {"ok": True, "message": f"Ancien thème remis en place. {emby['message']}", "emby_ok": emby["ok"]}, 200
+
+
+@app.route("/api/backups/restore", methods=["POST"])
+def api_backup_restore():
+    data = request.get_json(silent=True) or {}
+    item_id, name, title = str(data.get("id", "")), Path(str(data.get("name", ""))).name, str(data.get("title", ""))
+    return jsonify({"job": progress.start(lambda: _restore_work(item_id, name, title))})
 
 
 @app.route("/api/batch/start", methods=["POST"])
@@ -1142,6 +1280,35 @@ nightly_settings.init_app(app, BASE_DIR, nightly, lambda: threading.Thread(targe
 import settings_page
 
 
+AUTO_TRIM = {"auto_trim": bool(CONFIG.get("audio", {}).get("auto_trim", False)),
+             "trim_max": int(CONFIG.get("audio", {}).get("trim_max", 90)), "trim_fade": float(CONFIG.get("audio", {}).get("trim_fade", 3))}
+
+
+def _maybe_trim(path):
+    """Coupe automatique (réglage) : un thème plus long que la durée maximale est coupé, avec un fondu de sortie.
+    Jamais pour l'éditeur (déjà coupé à la main), ni pour la normalisation ou une restauration."""
+    if not AUTO_TRIM["auto_trim"]:
+        return False
+    from src.audio import convert_to_mp3
+    import tempfile
+    try:
+        length = audioedit.duration(path)
+    except Exception:
+        return False
+    mx, fade = AUTO_TRIM["trim_max"], AUTO_TRIM["trim_fade"]
+    if not length or length <= mx + 0.5:
+        return False
+    progress.say(f"Thème de {int(length)} s : coupé à {mx} s avec un fondu de sortie…")
+    with tempfile.TemporaryDirectory() as work:
+        cut, out = Path(work) / "cut.wav", Path(work) / "theme.mp3"
+        if not (audioedit.render(path, cut, 0.0, float(mx), 0.0, float(fade)) and convert_to_mp3(cut, out, TARGET_DB)):
+            logger.warning("Coupe automatique impossible pour %s : thème gardé entier", path)
+            return False
+        safe_copy(out, path)
+    logger.info("Coupe automatique : %s ramené de %d s à %d s", path.parent, int(length), mx)
+    return True
+
+
 def _set_target_db(value):
     global TARGET_DB
     TARGET_DB = float(value)
@@ -1150,7 +1317,8 @@ def _set_target_db(value):
 
 
 settings_page.init_app(app, BASE_DIR, lambda: APP_VERSION, lambda: CONFIG, lambda: CATS, lambda: IGNORED_FOLDERS, EMBY,
-                       "/mnt/mouflosyno/MouFlopening/Anciens thèmes", get_db=lambda: TARGET_DB, set_db=_set_target_db)
+                       "/mnt/mouflosyno/MouFlopening/Anciens thèmes", get_db=lambda: TARGET_DB, set_db=_set_target_db,
+                       get_trim=lambda: dict(AUTO_TRIM), set_trim=AUTO_TRIM.update)
 threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
 from src.sources import youtube as _yt_module
 threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")) or _work_lock.locked(),), daemon=True).start()

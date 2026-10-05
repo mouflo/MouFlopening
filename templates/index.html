@@ -83,6 +83,8 @@
     .cand h4 small { color:var(--muted); font-weight:400; margin-left:6px; }
     .theme { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
     .theme .slug { width:48px; font-weight:600; color:var(--accent); }
+    .theme .bkdate { flex:none; white-space:nowrap; font-size:.85rem; color:var(--muted); }
+    .theme audio { flex:1 1 200px; min-width:0; }
     .theme audio { flex:1; min-width:180px; height:36px; }
     .check { color:var(--muted); font-size:.9rem; display:flex; align-items:center; gap:6px; cursor:pointer; }
     .check input { width:17px; height:17px; accent-color:var(--accent); }
@@ -136,6 +138,7 @@
         <button class="btn" id="batchStart">⚡ Télécharger tous les thèmes manquants</button>
         <button class="btn ghost" id="dupStart">🔎 Doublons de saisons</button>
         <button class="btn ghost" id="normStart">🔊 Normaliser les thèmes existants</button>
+        <button class="btn ghost" id="retrySkipped">🔁 Réessayer les mis de côté</button>
         <button class="btn danger" id="batchStop" style="display:none">■ Arrêter</button>
         <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
     </div>
@@ -282,7 +285,7 @@ function renderList() {
             <div class="name">${esc(i.title || i.name)}</div>
             ${(cats[curCat] || {}).multi ? `<span class="pill">${esc(i.origin)}</span>` : ''}
             ${(i.seasons || []).length ? `<span class="pill">${i.seasons.filter(x => x.has_theme).length}/${i.seasons.length} saisons</span>` : ''}
-            <span class="pill${i.has_theme ? ' ok' : ''}">${i.has_theme ? '🎵 thème' : i.skipped ? 'rien trouvé' : 'sans thème'}</span></div>`).join('')
+            <span class="pill${i.has_theme ? ' ok' : ''}"${i.skipped && i.skip_why ? ` title="${esc(i.skip_why)}"` : ''}>${i.has_theme ? '🎵 thème' : i.skipped ? 'rien trouvé' : 'sans thème'}</span></div>`).join('')
         : '<div class="empty">Aucun titre dans cette médiathèque.</div>';
     document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => {
         if (listCollapsed && selected && r.dataset.id === selected.id) { listCollapsed = false; renderList(); }   // clic sur la série choisie : on rouvre la liste
@@ -293,8 +296,8 @@ function renderList() {
 // ---------- détail ----------
 let target = null;   // ce qu'on traite : la série elle-même ou l'une de ses saisons
 function targetsOf(item) {
-    return [{id: item.id, label: catKind() === 'movie' ? 'Film' : 'Série', number: null, has_theme: item.has_theme, skipped: item.skipped}].concat((item.seasons || []).map(x =>
-        ({id: x.id, label: x.number === 0 ? 'Spéciaux (S0)' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme, skipped: x.skipped})));
+    return [{id: item.id, label: catKind() === 'movie' ? 'Film' : 'Série', number: null, has_theme: item.has_theme, skipped: item.skipped, skip_why: item.skip_why}].concat((item.seasons || []).map(x =>
+        ({id: x.id, label: x.number === 0 ? 'Spéciaux (S0)' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme, skipped: x.skipped, skip_why: x.skip_why})));
 }
 let origOn = true;
 try { origOn = localStorage.getItem('mf_orig') !== '0'; } catch (x) {}
@@ -318,6 +321,7 @@ function renderDetail() {
         <div class="path">${esc(selected.name)}</div>
         <div class="targets" id="targets"></div>
         <div id="current"></div>
+        <details class="custom" id="bkBox"><summary>🕘 Anciens thèmes de ce titre</summary><div id="bkList"><div class="hint">Chargement…</div></div></details>
         <div class="hint" id="hint"></div>
         <div class="search-row">
             <input type="text" id="q" value="${esc(defaultQuery())}" autocomplete="off">
@@ -334,6 +338,7 @@ function renderDetail() {
         <div id="msg"></div>
         <div id="cands"></div>`;
     renderTargets(); refreshCurrent();
+    $('bkBox').addEventListener('toggle', () => { if ($('bkBox').open) loadBackups(); });
     $('btnSearch').addEventListener('click', () => search(true));
     refreshSkip();
     const customDone = r => {
@@ -383,7 +388,7 @@ function refreshSkip() {
     const row = $('skipRow'); if (!row) return;
     if (target.has_theme) { row.innerHTML = ''; return; }
     row.innerHTML = target.skipped
-        ? `<div class="hint">Mis de côté (recherche sans résultat) : il n'apparaît plus dans « sans thème ». <button class="btn ghost small" id="btnSkip">↩ Remettre dans la liste</button></div>`
+        ? `<div class="hint">${esc(target.skip_why ? target.skip_why.charAt(0).toUpperCase() + target.skip_why.slice(1) : 'Mis de côté (recherche sans résultat)')} : il n'apparaît plus dans « sans thème ». <button class="btn ghost small" id="btnSkip">↩ Remettre dans la liste</button></div>`
         : `<div class="hint"><button class="btn ghost small" id="btnSkip">⏭ Mettre de côté</button> pour ne plus le voir dans « sans thème »</div>`;
     $('btnSkip').addEventListener('click', async () => {
         const want = !target.skipped;
@@ -438,6 +443,29 @@ function refreshCurrent() {
         ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio>
            <div id="delRow"><button class="btn ghost small" id="btnEditCur">✂️ Éditer ce thème</button> <button class="btn danger small" id="btnDel">🗑 Supprimer ce thème</button></div></div>` : '';
     if (target.has_theme) { $('btnDel').addEventListener('click', () => deleteStep(1)); $('btnEditCur').addEventListener('click', () => startEdit('current')); }
+    if ($('bkBox') && $('bkBox').dataset.for !== target.id) { $('bkBox').dataset.for = target.id; $('bkBox').open = false; $('bkList').innerHTML = '<div class="hint">Chargement…</div>'; }
+}
+
+// Anciens thèmes (mis de côté à chaque remplacement) : écouter, remettre en place
+async function loadBackups() {
+    const tgt = target, r = await api('/api/backups?id=' + encodeURIComponent(tgt.id));
+    if (!target || target.id !== tgt.id) return;
+    const list = r.backups || [];
+    if (r.error || !list.length) { $('bkList').innerHTML = `<div class="hint">${esc(r.error || 'Aucun ancien thème pour ' + tgt.label.toLowerCase() + '.')}</div>`; return; }
+    $('bkList').innerHTML = `<div class="hint">Remettre un ancien thème met l'actuel de côté (rien n'est supprimé).</div>
+        <div class="search-row"><button class="btn ghost small" data-restore="${esc(list[0].name)}">↩️ Annuler le dernier remplacement</button></div>` +
+        list.map(b => `<div class="theme"><span class="bkdate">${esc(b.date)}</span><audio controls preload="none" src="/api/backups/file?name=${encodeURIComponent(b.name)}"></audio>
+            <button class="btn small" data-restore="${esc(b.name)}">Restaurer</button></div>`).join('');
+    $('bkList').querySelectorAll('audio').forEach(a => a.addEventListener('play', () => stopPlayers(a)));
+    $('bkList').querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', async () => {
+        if (!confirm('Remettre ce thème en place ? Le thème actuel sera mis de côté (pas supprimé).')) return;
+        $('bkList').querySelectorAll('button').forEach(x => x.disabled = true);
+        const res = await runJob('/api/backups/restore', {id: tgt.id, name: b.dataset.restore, title: selected.title},
+            (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; });
+        note($('msg'), res.message || res.error, res.error ? 'err' : (res.emby_ok ? 'ok' : 'warn'));
+        await loadLibrary(true);
+        if ($('bkBox') && $('bkBox').open) loadBackups();
+    }));
 }
 
 // Une seule écoute à la fois : lancer un thème arrête (et ferme) celui qui jouait ; l'éditeur coupe tout
@@ -558,6 +586,14 @@ $('batchStart').addEventListener('click', async () => {
     if (!confirm(anime ? 'Chercher et télécharger automatiquement les thèmes manquants de « ' + ((cats[curCat] || {}).name || '') + ' » sur AnimeThemes (' + (withSeasons ? 'séries et saisons' : 'séries seulement') + ') ?'
         : 'Télécharger les thèmes manquants de « ' + ((cats[curCat] || {}).name || '') + ' » ?\n\nSeuls les thèmes validés par la communauté (ThemerrDB) sont pris. Les autres titres sont ignorés : tu les cherches à la main.')) return;
     const r = await post('/api/batch/start', {seasons: withSeasons, cat: curCat}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+});
+$('retrySkipped').addEventListener('click', async () => {
+    const name = (cats[curCat] || {}).name || '';
+    if (!confirm('Remettre dans « sans thème » tous les titres mis de côté de « ' + name + ' » ? Ils seront recherchés à nouveau au prochain lot.')) return;
+    const r = await post('/api/skipped/retry', {cat: curCat});
+    if (r.error) return note($('globalNote'), r.error, 'err');
+    note($('globalNote'), r.count ? `${r.count} titre(s) remis dans « sans thème ».` : 'Aucun titre mis de côté dans cet onglet.', 'ok');
+    loadLibrary(true);
 });
 $('normStart').addEventListener('click', async () => {
     if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier des anciens thèmes, voir Réglages). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;

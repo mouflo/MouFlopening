@@ -22,7 +22,7 @@ _URL_RE = re.compile(r"^https?://[^\s/]+(:\d{1,5})?(/\S*)?$")
 _BAD_CHARS = set('"$`\\\n\r')     # interdits : ils casseraient le fichier data/secrets.env
 
 
-def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby, backup_default, get_db=None, set_db=None):
+def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby, backup_default, get_db=None, set_db=None, get_trim=None, set_trim=None):
     base_dir = Path(base_dir)
     import fs_browser
     fs_browser.init_app(app)
@@ -118,7 +118,34 @@ def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby,
 
     @app.route("/api/settings/audio")
     def audio_state():
-        return jsonify({"target_db": get_db() if get_db else 89})
+        return jsonify({"target_db": get_db() if get_db else 89, **(get_trim() if get_trim else {})})
+
+    @app.route("/api/settings/trim", methods=["POST"])
+    def trim_save():
+        """Coupe automatique des thèmes trop longs (avec fondu de sortie). Enregistré dans config.json, pris en compte tout de suite."""
+        body = request.get_json(silent=True) or {}
+        try:
+            on = bool(body.get("auto_trim"))
+            mx = round(float(str(body.get("trim_max", 90)).replace(",", ".")))
+            fade = round(float(str(body.get("trim_fade", 3)).replace(",", ".")), 1)
+        except ValueError:
+            return jsonify({"ok": False, "error": "Entre des nombres (secondes)."}), 400
+        if not 20 <= mx <= 600 or not 0 <= fade <= 15 or fade >= mx:
+            return jsonify({"ok": False, "error": "Durée maximale entre 20 et 600 s, fondu entre 0 et 15 s."}), 400
+        path = base_dir / "config.json"
+        try:
+            cfg = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except ValueError:
+            return jsonify({"ok": False, "error": "config.json est illisible : rien n'a été modifié."}), 500
+        cfg.setdefault("audio", {}).update(auto_trim=on, trim_max=mx, trim_fade=fade)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+        if set_trim:
+            set_trim({"auto_trim": on, "trim_max": mx, "trim_fade": fade})
+        logger.info("Coupe automatique : %s (%d s, fondu %g s)", "activée" if on else "désactivée", mx, fade)
+        return jsonify({"ok": True, "message": (f"Enregistré : les prochains thèmes de plus de {mx} s seront coupés à {mx} s avec un fondu de {fade:g} s."
+                                                if on else "Enregistré : coupe automatique désactivée.")})
 
     @app.route("/api/settings/audio", methods=["POST"])
     def audio_save():

@@ -45,7 +45,8 @@ def settings():
     except (OSError, ValueError):
         d = {}
     return {"enabled": bool(d.get("enabled", False)), "hour": min(23, max(0, int(d.get("hour", 3)))),
-            "seasons": bool(d.get("seasons", True)), "last_run": d.get("last_run", ""), "last_summary": d.get("last_summary", "")}
+            "seasons": bool(d.get("seasons", True)), "last_run": d.get("last_run", ""), "last_summary": d.get("last_summary", ""),
+            "retry_days": max(0, int(d.get("retry_days", 30) or 0))}
 
 
 def save(**changes):
@@ -127,16 +128,37 @@ def _plural(n, one, many):
     return f"{n} {one if n <= 1 else many}"
 
 
+_REASONS = [                       # (mot-clé dans le message d'échec, libellé du groupe)
+    ("⏳", "⏳ panne passagère (retenté au prochain lot)"),
+    ("ThemerrDB", "📭 pas de thème validé par la communauté (ThemerrDB)"),
+    ("aucun générique", "🔎 aucun générique trouvé (AnimeThemes)"),
+    ("fiche propre", "🎞️ pas de générique propre à la saison"),
+    ("même thème", "🎞️ pas de générique propre à la saison"),
+    ("pour une saison", "🎞️ saison : à chercher à la main"),
+]
+
+
+def reason_group(message):
+    for key, label in _REASONS:
+        if key in (message or ""):
+            return label
+    return "❓ autre raison (voir le Journal)"
+
+
 def format_report(by_cat, seconds, now=None):
-    """by_cat : [{"kind": "movie|series|anime", "added": [titres], "failed": n}, ...] -> texte du message (ou None s'il n'y a rien à dire)."""
+    """by_cat : [{"kind": "movie|series|anime", "added": [titres], "failed": n, "failures": [(titre, raison)], "nas_error": "..."}]
+    -> texte du message, ou None s'il n'y a vraiment rien à dire."""
     now = now or datetime.now()
     added = sum(len(c["added"]) for c in by_cat)
     failed = sum(c["failed"] for c in by_cat)
-    if not added:
+    nas = [c["nas_error"] for c in by_cat if c.get("nas_error")]
+    if not added and not failed and not nas:
         return None
     mins = max(1, round(seconds / 60))
     lines = ["🌙 MouFlopening — compte rendu de la nuit",
              f"📅 {_JOURS[now.weekday()]} {now.day} {_MOIS[now.month - 1]} · ⏱️ {mins} min", ""]
+    if nas:
+        lines += ["⚠️ Partage réseau inaccessible : " + ", ".join(nas), "   Rien n'a été touché dans ces dossiers. Le NAS est-il bien monté ?", ""]
     for c in by_cat:
         if not c["added"]:
             continue
@@ -146,10 +168,20 @@ def format_report(by_cat, seconds, now=None):
         if len(c["added"]) > len(shown):
             lines.append(f"  … et {len(c['added']) - len(shown)} autres")
         lines.append("")
-    lines.append(f"🎶 {_plural(added, 'nouveau thème', 'nouveaux thèmes')} dans Emby" + (" 🎉" if added >= 5 else ""))
+    if added:
+        lines.append(f"🎶 {_plural(added, 'nouveau thème', 'nouveaux thèmes')} dans Emby" + (" 🎉" if added >= 5 else ""))
     if failed:
         lines.append(f"🔍 {_plural(failed, 'titre', 'titres')} sans thème validé : à chercher à la main")
-    return "\n".join(lines)
+        groups = {}
+        for c in by_cat:
+            for title, why in c.get("failures") or []:
+                groups.setdefault(reason_group(why), []).append(title)
+        for label, titles in sorted(groups.items(), key=lambda g: -len(g[1])):
+            more = f" … (+{len(titles) - 4})" if len(titles) > 4 else ""
+            lines.append(f"  {label} : {len(titles)}")
+            lines.append("     " + ", ".join(titles[:4]) + more)
+    text = "\n".join(lines)
+    return text if len(text) <= 4000 else text[:3990] + "\n…"
 
 
 # ---------------------------------------------------------------- planificateur

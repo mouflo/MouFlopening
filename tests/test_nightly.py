@@ -28,7 +28,18 @@ class TestNightly(unittest.TestCase):
         self.d.cleanup()
 
     def test_rapport_vide_pas_de_message(self):
-        self.assertIsNone(nightly.format_report([{"kind": "movie", "added": [], "failed": 4}], 60))
+        self.assertIsNone(nightly.format_report([{"kind": "movie", "added": [], "failed": 0}], 60))
+
+    def test_rapport_echecs_seulement_et_raisons(self):
+        t = nightly.format_report([{"kind": "anime", "added": [], "failed": 3, "failures": [
+            ("A", "aucun générique trouvé sur AnimeThemes pour « A »"), ("B", "⏳ AnimeThemes ne répond pas"), ("C", "aucun générique trouvé")]}], 60)
+        self.assertIn("3 titres sans thème", t)
+        self.assertIn("aucun générique trouvé (AnimeThemes) : 2", t)
+        self.assertIn("panne passagère", t)
+
+    def test_rapport_nas(self):
+        t = nightly.format_report([{"kind": "anime", "added": [], "failed": 0, "nas_error": "/mnt/x"}], 60)
+        self.assertIn("Partage réseau inaccessible : /mnt/x", t)
 
     def test_rapport(self):
         t = nightly.format_report([{"kind": "movie", "added": ["A (2020)"], "failed": 2}], 130, datetime(2026, 10, 6, 3, 0))

@@ -32,7 +32,13 @@ def init_app(app, base_dir, nightly, run_now, is_busy):
             return jsonify({"error": "Heure invalide"}), 400
         if not 0 <= hour <= 23:
             return jsonify({"error": "Heure invalide (0 à 23)"}), 400
-        nightly.save(enabled=bool(body.get("enabled")), hour=hour, seasons=bool(body.get("seasons", True)))
+        try:
+            retry = int(body.get("retry_days", nightly.settings()["retry_days"]))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Nombre de jours invalide"}), 400
+        if not 0 <= retry <= 3650:
+            return jsonify({"error": "Nombre de jours invalide (0 à 3650)"}), 400
+        nightly.save(enabled=bool(body.get("enabled")), hour=hour, seasons=bool(body.get("seasons", True)), retry_days=retry)
         logger.info("Lot de nuit : %s à %d h", "activé" if body.get("enabled") else "désactivé", hour)
         return jsonify({"ok": True})
 

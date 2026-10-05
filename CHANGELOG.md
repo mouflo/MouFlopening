@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.26.0] - 2026-10-06
+
+### Ajouté
+- 🕘 **Anciens thèmes** : sur la fiche d'un titre, la liste de ses anciens thèmes (du plus récent au plus ancien) à écouter et à **restaurer** ; « ↩️ Annuler le dernier remplacement ». Restaurer met le thème actuel de côté, rien n'est jamais supprimé
+- ✂️ **Coupe automatique** (Réglages → Volume) : les nouveaux thèmes plus longs que la durée choisie sont coupés avec un fondu de sortie (désactivée par défaut ; jamais pour un thème coupé avec l'éditeur)
+- 🔁 **Titres mis de côté plus malins** : la raison et la date sont enregistrées (affichées sur la fiche et au survol), les titres sont retentés automatiquement après N jours (Réglages → Lot de nuit, 30 par défaut, 0 = jamais), et le bouton « Réessayer les mis de côté » les remet tout de suite dans « sans thème »
+- 🛡️ **NAS vérifié avant chaque lot** (téléchargement, lot de nuit, normalisation) : si un dossier de la médiathèque est inaccessible, le lot s'arrête sans rien toucher ni mettre de côté, et le compte rendu Telegram le signale
+
+### Amélioré
+- Compte rendu Telegram de la nuit : envoyé aussi quand il n'y a que des échecs, avec les titres sans thème regroupés par raison (pas dans ThemerrDB, aucun générique trouvé, panne passagère…)
+
+### Corrigé
+- La normalisation ne peut plus rester bloquée « en cours » après une erreur de lecture du NAS
+
 ## [0.25.2] - 2026-10-06
 
 ### Corrigé

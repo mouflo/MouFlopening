@@ -43,6 +43,12 @@
         <div class="field" style="max-width:200px"><label for="dbValue">Niveau en dB (entre 70 et 100)</label><input type="text" inputmode="decimal" id="dbValue" autocomplete="off" placeholder="89"></div>
         <div class="row"><button class="btn" id="dbSave">Enregistrer</button></div>
         <div id="dbMsg"></div>
+        <label class="check" style="margin-top:14px"><input type="checkbox" id="trimOn"> Couper automatiquement les thèmes trop longs (avec un fondu de sortie)</label>
+        <div class="row"><div class="field" style="max-width:200px"><label for="trimMax">Durée maximale (secondes)</label><input type="text" inputmode="numeric" id="trimMax" placeholder="90"></div>
+            <div class="field" style="max-width:200px"><label for="trimFade">Fondu de sortie (secondes)</label><input type="text" inputmode="decimal" id="trimFade" placeholder="3"></div></div>
+        <div class="sub">S'applique aux nouveaux thèmes (lot, choix à la main, lien ou fichier), jamais à un thème coupé avec l'éditeur ✂️.</div>
+        <div class="row"><button class="btn" id="trimSave">Enregistrer</button></div>
+        <div id="trimMsg"></div>
     </div>
 
     <div class="panel">
@@ -81,6 +87,7 @@
         <label class="check"><input type="checkbox" id="nightOn"> Activer le lot de nuit</label>
         <label class="check"><input type="checkbox" id="nightSeasons"> Remplir aussi les saisons des animes (jamais le même thème que la série)</label>
         <div class="field" style="max-width:160px"><label for="nightHour">Heure de lancement</label><select id="nightHour"></select></div>
+        <div class="field" style="max-width:340px"><label for="nightRetry">Réessayer les titres mis de côté après (jours, 0 = jamais)</label><input type="text" inputmode="numeric" id="nightRetry" placeholder="30"></div>
         <div class="state" id="tgState"></div>
         <div class="field"><label for="tgToken">Jeton du bot Telegram (donné par @BotFather)</label><input type="password" id="tgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:ABC… (laisse vide pour garder l'actuel)"></div>
         <div class="field"><label for="tgChat">Identifiant de ta discussion</label><input type="text" id="tgChat" autocomplete="off" placeholder="Un nombre, ex. 123456789 (laisse vide pour garder l'actuel)"></div>
@@ -143,12 +150,12 @@ $('folderAdd').addEventListener('click', () => browseFolder('/mnt', path => {
 $('nightHour').innerHTML = Array.from({length: 24}, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');
 async function loadNight() {
     const s = await api('/api/nightly');
-    $('nightOn').checked = s.enabled; $('nightSeasons').checked = s.seasons; $('nightHour').value = s.hour;
+    $('nightOn').checked = s.enabled; $('nightSeasons').checked = s.seasons; $('nightHour').value = s.hour; $('nightRetry').value = s.retry_days;
     $('tgState').textContent = s.telegram ? `Telegram : réglé (discussion ${s.chat_hint}${s.telegram_origin === 'MouFlanimeXer' ? ', repris de MouFlanimeXer' : ''})` : 'Telegram : pas encore réglé';
     $('nightState').textContent = s.last_summary ? 'Dernier lot de nuit : ' + s.last_summary : '';
 }
 $('nightSave').addEventListener('click', async () => {
-    const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, seasons: $('nightSeasons').checked, hour: Number($('nightHour').value)});
+    const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, seasons: $('nightSeasons').checked, hour: Number($('nightHour').value), retry_days: Number($('nightRetry').value || 0)});
     if (r1.error) return say('nightMsg', r1.error, false);
     if ($('tgToken').value.trim() || $('tgChat').value.trim()) {
         say('nightMsg', 'Vérification de Telegram…', true);
@@ -171,7 +178,8 @@ $('ckTest').addEventListener('click', async () => { const r = await post('/api/s
 $('ckSave').addEventListener('click', async () => { const r = await post('/api/settings/youtube-cookies', {text: $('ckText').value}); say('ckMsg', r.message || r.error, r.ok); if (r.ok) { $('ckText').value = ''; loadCk(); } });
 $('ckClear').addEventListener('click', async () => { if (!confirm('Supprimer les cookies YouTube enregistrés ?')) return; const r = await post('/api/settings/youtube-cookies', {clear: true}); say('ckMsg', r.message || r.error, r.ok); loadCk(); });
 loadCk();
-(async () => { const a = await api('/api/settings/audio'); $('dbValue').value = a.target_db; })();
+(async () => { const a = await api('/api/settings/audio'); $('dbValue').value = a.target_db; $('trimOn').checked = !!a.auto_trim; $('trimMax').value = a.trim_max || 90; $('trimFade').value = a.trim_fade == null ? 3 : a.trim_fade; })();
+simpleSave('trimSave', 'trimMsg', '/api/settings/trim', () => ({auto_trim: $('trimOn').checked, trim_max: $('trimMax').value, trim_fade: $('trimFade').value}));
 simpleSave('dbSave', 'dbMsg', '/api/settings/audio', () => ({target_db: $('dbValue').value}));
 keyForm('emby', '/api/settings/emby'); keyForm('tmdb', '/api/settings/tmdb'); loadPaths(); loadNight();
 </script>
