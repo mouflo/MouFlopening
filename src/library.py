@@ -8,9 +8,29 @@ from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
 
 THEME_FILENAME = "theme.mp3"
+# Emby lit « theme.<extension audio> » ou tous les fichiers audio d'un sous-dossier « theme-music »
+THEME_EXTS = (".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wav", ".opus", ".wma")
+THEME_DIR = "theme-music"
 
 # Dossiers système du Synology et dossiers de saison à ignorer
 IGNORED_DIRS = {"@eaDir", "@tmp", "@__thumb", ".@__thumb", ".@tmp", ".hidden", ".trashes", "#recycle"}
+
+
+def find_theme(folder: Path) -> Optional[Path]:
+    """Le thème d'un dossier tel qu'Emby le voit (theme.mp3 d'abord), ou None."""
+    for ext in THEME_EXTS:
+        f = folder / f"theme{ext}"
+        if f.is_file():
+            return f
+    d = folder / THEME_DIR
+    try:
+        if d.is_dir():
+            for f in sorted(d.iterdir()):
+                if f.is_file() and f.suffix.lower() in THEME_EXTS:
+                    return f
+    except OSError:
+        pass
+    return None
 
 
 def clean_title(folder_name: str) -> str:
@@ -34,7 +54,7 @@ def iter_series_folders(roots: List[str]) -> Iterator[Path]:
 def missing_themes(roots: List[str]) -> List[Tuple[str, Path]]:
     """Séries sans theme.mp3 : liste de (titre nettoyé, dossier)."""
     return [(clean_title(f.name), f) for f in iter_series_folders(roots)
-            if not (f / THEME_FILENAME).exists()]
+            if find_theme(f) is None]
 
 
 def missing_season_themes(roots: List[str]) -> List[Tuple[str, int, Path, Path]]:
@@ -42,7 +62,7 @@ def missing_season_themes(roots: List[str]) -> List[Tuple[str, int, Path, Path]]
     out = []
     for series in iter_series_folders(roots):
         for number, folder in season_folders(series):
-            if number >= 1 and not (folder / THEME_FILENAME).exists():   # les « Specials » se choisissent à la main
+            if number >= 1 and find_theme(folder) is None:   # les « Specials » se choisissent à la main
                 out.append((clean_title(series.name), number, folder, series))
     return out
 
@@ -88,9 +108,9 @@ def list_library(roots: List[str]) -> List[dict]:
         for folder in sorted(base.iterdir(), key=lambda f: f.name.lower()):
             if folder.is_dir() and folder.name not in IGNORED_DIRS and not folder.name.startswith("."):
                 seasons = [{"id": f"{i}/{folder.name}/{sub.name}", "name": sub.name, "number": n,
-                            "has_theme": (sub / THEME_FILENAME).exists()} for n, sub in season_folders(folder)]
+                            "has_theme": find_theme(sub) is not None} for n, sub in season_folders(folder)]
                 items.append({"id": f"{i}/{folder.name}", "name": folder.name, "title": clean_title(folder.name),
-                              "has_theme": (folder / THEME_FILENAME).exists(), "seasons": seasons})
+                              "has_theme": find_theme(folder) is not None, "seasons": seasons})
     return items
 
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-10-05
+
+### Ajouté
+- Bouton **« Normaliser les thèmes existants à 89 dB »** : traite les thèmes MP3 déjà présents, sans rien refaire si déjà à 89 dB (registre `data/normalized.json`), sauvegarde de l'original dans `data/themes-backup`
+- Reconnaissance de `theme.mp3/.flac/.wav/.ogg/.m4a…` et du sous-dossier `theme-music/` (comme Emby) ; l'ancien thème est sauvegardé avant tout remplacement
+- Interface mobile adaptée (plus de débordement horizontal) ; liste et candidats se replient quand on choisit une série (▾ changer)
+- Dossier **Specials / S0** géré comme une saison (un thème pour le dossier). Emby ne gère pas de thème par fichier : pour un thème par film, mettre chaque film dans son propre dossier
+
 ## [0.3.0] - 2026-10-05
 
 ### Ajouté

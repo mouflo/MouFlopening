@@ -8,10 +8,15 @@ MouFlopening - interface web (même conception que MouFloster et MouFlanimeXer).
 - Le thème est enregistré sous theme.mp3 dans le dossier de la série, puis Emby actualise cette série seule
 """
 
+import json
 import logging
+import mimetypes
 import os
+import re
+import shutil
 import subprocess
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
@@ -23,7 +28,7 @@ load_secrets_env()   # identifiants et clé Emby (data/secrets.env), avant l'ini
 
 from src import library
 from src.emby_client import EmbyClient
-from src.library import THEME_FILENAME
+from src.library import THEME_DIR, THEME_EXTS, THEME_FILENAME, find_theme
 from src.sources.animethemes import AnimeThemesSource
 
 BASE_VERSION = "0.2"
@@ -57,11 +62,42 @@ auth.init_app(app, APP_VERSION)
 
 _work_lock = threading.Lock()   # un seul téléchargement/conversion à la fois (ménage le NAS et le CPU)
 
+BACKUP_DIR = BASE_DIR / "data" / "themes-backup"
+NORMALIZED_FILE = BASE_DIR / "data" / "normalized.json"
+
+
+def _slug(text):
+    return re.sub(r"[^\w.-]+", "_", text).strip("_")[:80] or "theme"
+
+
+def _backup_existing(folder):
+    """Avant de poser un nouveau thème, l'ancien (theme.mp3 ou theme.flac, ogg…) est mis de côté, jamais supprimé."""
+    for ext in THEME_EXTS:
+        old = folder / f"theme{ext}"
+        if old.is_file():
+            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            name = f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(folder.parent.name)}_{_slug(folder.name)}{ext}"
+            shutil.move(str(old), str(BACKUP_DIR / name))
+            logger.info("Ancien thème mis de côté : %s", BACKUP_DIR / name)
+
+
+def _read_registry():
+    try:
+        return json.loads(NORMALIZED_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _signature(path):
+    st = path.stat()
+    return [st.st_size, int(st.st_mtime)]
+
+
 # ---------------------------------------------------------------------------
 # Téléchargement automatique de toutes les séries sans thème (en arrière-plan)
 # ---------------------------------------------------------------------------
 
-BATCH = {"running": False, "stop": False, "total": 0, "done": 0, "failed": 0, "current": "", "messages": []}
+BATCH = {"kind": "download", "running": False, "stop": False, "total": 0, "done": 0, "failed": 0, "current": "", "messages": []}
 _batch_lock = threading.Lock()
 
 
@@ -87,7 +123,7 @@ def _run_batch(limit, with_seasons):
     if limit:
         todo = todo[:limit]
     with _batch_lock:
-        BATCH.update(running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
+        BATCH.update(kind="download", running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
     _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)"))
     try:
         for kind, title, folder, series, number in todo:
@@ -117,10 +153,72 @@ def _auto_one(folder, title, series=None, number=None, query=None):
         result = SOURCE.search(query, "anime")
         if not result:
             return False, f"aucun générique trouvé sur AnimeThemes pour « {query} »"
+        _backup_existing(folder)
         if not SOURCE.download(result.url, folder / THEME_FILENAME):
             return False, "téléchargement ou conversion impossible (voir le Journal)"
     emby = EMBY.refresh_series(series.name, title, number)
     return True, f"{result.title} · {emby['message']}"
+
+def _run_normalize():
+    """Ramène à TARGET_DB tous les theme.mp3 déjà présents (originaux copiés dans data/themes-backup/)."""
+    from src.audio import normalize_file
+    files = []
+    skipped_other = 0
+    for series in library.iter_series_folders(ROOTS):
+        for label, folder in [("série", series)] + [(f"saison {n}", f) for n, f in library.season_folders(series)]:
+            theme = find_theme(folder)
+            if theme is None:
+                continue
+            if theme.suffix.lower() == ".mp3" and theme.parent == folder:
+                files.append((f"{library.clean_title(series.name)} — {label}", theme))
+            else:
+                skipped_other += 1
+    registry = _read_registry()
+    backup = BACKUP_DIR / "normalisation" / f"{datetime.now():%Y%m%d-%H%M%S}"
+    with _batch_lock:
+        BATCH.update(kind="normalize", running=True, stop=False, total=len(files), done=0, failed=0, current="", messages=[])
+    _batch_note(f"{len(files)} thème(s) MP3 à vérifier (cible {TARGET_DB:g} dB)" + (f" · {skipped_other} autre(s) format(s) ignoré(s)" if skipped_other else ""))
+    changed = already = 0
+    try:
+        for label, path in files:
+            if BATCH["stop"]:
+                _batch_note("Arrêt demandé")
+                break
+            with _batch_lock:
+                BATCH["current"] = label
+            if registry.get(str(path)) == _signature(path):
+                already += 1
+                with _batch_lock:
+                    BATCH["done"] += 1
+                continue
+            with _work_lock:
+                status, before, after = normalize_file(path, TARGET_DB, backup_dir=backup / _slug(label))
+            if status == "error":
+                with _batch_lock:
+                    BATCH["failed"] += 1
+                _batch_note(f"❌ {label} — mesure ou conversion impossible (voir le Journal)")
+                continue
+            if status == "done":
+                changed += 1
+                registry[str(path)] = _signature(path)
+                _batch_note(f"🔊 {label} — {before:.1f} → {after:.1f} dB" if after is not None else f"🔊 {label} normalisé")
+            else:
+                already += 1
+            with _batch_lock:
+                BATCH["done"] += 1
+        try:
+            NORMALIZED_FILE.parent.mkdir(parents=True, exist_ok=True)
+            NORMALIZED_FILE.write_text(json.dumps(registry))
+        except OSError:
+            pass
+        _batch_note(f"Terminé : {changed} normalisé(s), {already} déjà au bon niveau" + (f" · originaux dans {backup}" if changed else ""))
+    except Exception:
+        logger.exception("La normalisation s'est arrêtée sur une erreur")
+        _batch_note("⚠️ Erreur inattendue (détails dans le Journal)")
+    finally:
+        with _batch_lock:
+            BATCH.update(running=False, current="")
+
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -156,6 +254,7 @@ def api_save():
     if not SOURCE.is_allowed_url(url):
         return jsonify({"error": "Adresse non autorisée (seul animethemes.moe est accepté)"}), 400
     with _work_lock:
+        _backup_existing(folder)
         ok = SOURCE.download(url, folder / THEME_FILENAME)
     if not ok:
         return jsonify({"error": "Téléchargement ou conversion impossible (détails : bouton Journal)"}), 502
@@ -179,10 +278,10 @@ def api_auto():
 @app.route("/api/theme")
 def api_theme():
     folder = library.resolve_folder(ROOTS, request.args.get("id", ""))
-    path = folder / THEME_FILENAME if folder else None
-    if not path or not path.is_file():
+    path = find_theme(folder) if folder else None
+    if not path:
         return jsonify({"error": "Pas de thème"}), 404
-    return send_file(path, mimetype="audio/mpeg", conditional=True)
+    return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "audio/mpeg", conditional=True)
 
 
 @app.route("/api/batch/start", methods=["POST"])
@@ -194,6 +293,16 @@ def api_batch_start():
             return jsonify({"error": "Un lot est déjà en cours"}), 409
         BATCH.update(running=True, stop=False, total=0, done=0, failed=0, current="Préparation…", messages=[])
     threading.Thread(target=_run_batch, args=(int(limit) if limit else None, with_seasons), daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/normalize/start", methods=["POST"])
+def api_normalize_start():
+    with _batch_lock:
+        if BATCH["running"]:
+            return jsonify({"error": "Un traitement est déjà en cours"}), 409
+        BATCH.update(kind="normalize", running=True, stop=False, total=0, done=0, failed=0, current="Préparation…", messages=[])
+    threading.Thread(target=_run_normalize, daemon=True).start()
     return jsonify({"ok": True})
 
 

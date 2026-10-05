@@ -37,8 +37,37 @@
     .progress.show { display:block; }
     .progress .bar { background:var(--accent); height:100%; width:0; transition:width .4s; }
     .progress .txt { position:absolute; inset:0; display:flex; align-items:center; padding:0 12px; font-size:.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .layout > * { min-width:0; }
     .layout { display:grid; grid-template-columns:minmax(260px,380px) 1fr; gap:16px; align-items:start; }
-    @media (max-width:800px) { .layout { grid-template-columns:1fr; } body { padding:8px; } .top-actions { position:static; margin-top:10px; } }
+    @media (max-width:800px) {
+        body { padding:10px; }
+        .layout { grid-template-columns:minmax(0,1fr); }        /* minmax(0,…) : un contenu large ne fait plus déborder la page */
+        .header { padding:16px; }
+        .header h1 { font-size:1.3rem; }
+        .top-actions { position:static; margin-top:12px; flex-wrap:wrap; }
+        .top-actions .version { width:100%; margin:0 0 2px; }
+        .toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .toolbar .stat { padding:8px 12px; }
+        .toolbar .btn, .toolbar .check, .progress { grid-column:1 / -1; }
+        .toolbar .btn { padding:12px 16px; }
+        .list { max-height:55vh; }
+        .filters { flex-wrap:wrap; }
+        .filters select { flex:1 1 100%; }
+        input[type=text], select { font-size:16px; }      /* évite le zoom automatique sur iPhone */
+        .search-row { flex-direction:column; }
+        .search-row input { min-width:0; width:100%; }
+        .search-row .btn { width:100%; padding:12px; }
+        .theme { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; }
+        .theme audio { grid-column:1 / -1; grid-row:2; width:100%; max-width:100%; min-width:0; }
+        .theme .btn { justify-self:end; padding:10px 16px; }
+        .cand h4 small { display:block; margin:2px 0 0; }
+        .chip { padding:9px 14px; }
+        .row { padding:12px; }
+        .modal { padding:0; align-items:stretch; }
+        .modal-box { max-width:none; max-height:none; height:100%; border-radius:0; }
+        .modal-box textarea { min-height:0; }
+        .modal-actions .btn { flex:1; padding:12px; }
+    }
     .filters { display:flex; gap:8px; margin-bottom:10px; }
     .filters input, .filters select, .search-row input { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:9px 10px; outline:none; }
     .filters input { flex:1; min-width:0; }
@@ -81,6 +110,16 @@
     .modal-sub { color:var(--muted); font-size:.85rem; margin-bottom:10px; }
     .modal-box textarea { flex:1; min-height:300px; background:#0c0c0c; color:#d6d6d6; border:1px solid var(--line); border-radius:4px; padding:10px; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; resize:none; }
     .modal-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .list.collapsed { max-height:none; }
+    .list.collapsed .row:not(.active) { display:none; }
+    .list.collapsed .row.active::after { content:"▾ changer"; color:var(--muted); font-size:.8rem; white-space:nowrap; }
+    .cands.collapsed .cand:not(.chosen) { display:none; }
+    .cands.collapsed .cand.chosen { border:1px solid var(--accent); cursor:pointer; }
+    .cands.collapsed .cand.chosen h4::after { content:"  ▾ changer"; color:var(--muted); font-size:.8rem; font-weight:400; }
+    .hint { color:var(--muted); font-size:.85rem; margin:0 0 10px; }
+    .batchlog { margin-bottom:16px; padding:10px 14px; }
+    .batchlog summary { cursor:pointer; color:var(--muted); font-size:.9rem; }
+    .batchlog pre { margin:10px 0 0; white-space:pre-wrap; word-break:break-word; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; color:#d6d6d6; max-height:40vh; overflow:auto; }
     ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:5px; } ::-webkit-scrollbar-track { background:transparent; }
 </style>
 </head>
@@ -103,9 +142,11 @@
         <div class="stat"><b id="nSeasons">–</b>saisons sans thème</div>
         <label class="check"><input type="checkbox" id="batchSeasons" checked> avec les saisons</label>
         <button class="btn" id="batchStart">⚡ Télécharger tous les thèmes manquants</button>
+        <button class="btn ghost" id="normStart">🔊 Normaliser les thèmes existants</button>
         <button class="btn danger" id="batchStop" style="display:none">■ Arrêter</button>
         <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
     </div>
+    <details class="panel batchlog" id="batchLogBox" style="display:none"><summary>Détail du dernier traitement</summary><pre id="batchLogTxt"></pre></details>
     <div id="globalNote"></div>
 
     <div class="layout">
@@ -145,7 +186,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let items = [], selected = null, emby = false;
+let items = [], selected = null, emby = false, listCollapsed = false;
 
 async function api(url, opts) {
     const res = await fetch(url, opts);
@@ -180,20 +221,24 @@ function renderList() {
     const q = $('filterText').value.trim().toLowerCase(), st = $('filterState').value;
     const keep = i => st === 'all' ? true : st === 'done' ? i.has_theme : st === 'seasons' ? (i.seasons || []).some(x => !x.has_theme && x.number > 0) : !i.has_theme;
     const rows = items.filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
+    $('list').classList.toggle('collapsed', listCollapsed && !!selected && rows.some(i => i.id === selected.id));
     $('list').innerHTML = rows.length ? rows.map(i =>
         `<div class="row${selected && selected.id === i.id ? ' active' : ''}" data-id="${esc(i.id)}">
             <div class="name">${esc(i.title || i.name)}</div>
             ${(i.seasons || []).length ? `<span class="pill">${i.seasons.filter(x => x.has_theme).length}/${i.seasons.length} saisons</span>` : ''}
             <span class="pill${i.has_theme ? ' ok' : ''}">${i.has_theme ? '🎵 thème' : 'sans thème'}</span></div>`).join('')
         : '<div class="empty">Aucune série.</div>';
-    document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => select(r.dataset.id)));
+    document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => {
+        if (listCollapsed && selected && r.dataset.id === selected.id) { listCollapsed = false; renderList(); }   // clic sur la série choisie : on rouvre la liste
+        else select(r.dataset.id);
+    }));
 }
 
 // ---------- détail ----------
 let target = null;   // ce qu'on traite : la série elle-même ou l'une de ses saisons
 function targetsOf(item) {
     return [{id: item.id, label: 'Série', number: null, has_theme: item.has_theme}].concat((item.seasons || []).map(x =>
-        ({id: x.id, label: x.number === 0 ? 'Spéciaux' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme})));
+        ({id: x.id, label: x.number === 0 ? 'Spéciaux (S0)' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme})));
 }
 function defaultQuery() {
     const base = selected.title || selected.name;
@@ -203,7 +248,9 @@ function defaultQuery() {
 function select(id) {
     selected = items.find(i => i.id === id); if (!selected) return;
     target = targetsOf(selected)[0];
+    listCollapsed = true;                 // la liste se referme sur la série choisie (comme MouFloster)
     renderList(); renderDetail();
+    if (window.innerWidth <= 800) $('detail').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 function renderDetail() {
@@ -212,6 +259,7 @@ function renderDetail() {
         <div class="path">${esc(selected.name)}</div>
         <div class="targets" id="targets"></div>
         <div id="current"></div>
+        <div class="hint" id="hint"></div>
         <div class="search-row">
             <input type="text" id="q" value="${esc(defaultQuery())}" autocomplete="off">
             <button class="btn" id="btnSearch">🔍 Chercher</button>
@@ -235,13 +283,14 @@ function renderTargets() {
 
 function switchTarget(id) {
     target = targetsOf(selected).find(t => t.id === id) || target;
-    $('q').value = defaultQuery(); $('cands').innerHTML = ''; note($('msg'), '');
+    $('q').value = defaultQuery(); $('cands').innerHTML = ''; $('cands').className = 'cands'; note($('msg'), '');
     renderTargets(); refreshCurrent();
     if (!target.has_theme) search();
 }
 
 function refreshCurrent() {
     if (!selected || !$('current')) return;
+    $('hint').textContent = target.number === 0 ? 'Emby associe un thème à un dossier, pas à un fichier : ce thème sera lu pour tous les épisodes et films du dossier Spéciaux. Le mode automatique ne traite pas les Spéciaux : choisis-le ici.' : '';
     $('current').innerHTML = target.has_theme
         ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio></div>` : '';
 }
@@ -253,8 +302,9 @@ async function search() {
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
+    $('cands').className = 'cands';
     $('cands').innerHTML = res.map((a, ai) => `
-        <div class="cand"><h4>${esc(a.name)}<small>${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
+        <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
         ${a.themes.map((t, ti) => `
             <div class="theme"><span class="slug">${esc(t.slug)}</span>
             <audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>
@@ -266,7 +316,14 @@ async function search() {
         const r = await post('/api/save', {id: target.id, url: t.audio || t.video, title: selected.title});
         b.disabled = false; b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
-        if (!r.error) loadLibrary(true);
+        if (!r.error) {
+            document.querySelectorAll('.cand').forEach(c => c.classList.toggle('chosen', c.dataset.ai === b.dataset.a));
+            $('cands').classList.add('collapsed');
+            loadLibrary(true);
+        }
+    }));
+    document.querySelectorAll('.cand').forEach(c => c.addEventListener('click', e => {
+        if ($('cands').classList.contains('collapsed') && c.classList.contains('chosen') && !e.target.closest('audio,button')) $('cands').classList.remove('collapsed');
     }));
 }
 
@@ -285,8 +342,10 @@ async function pollBatch() {
     const n = s.done + s.failed;
     $('progress').classList.toggle('show', s.running || s.total > 0);
     $('bar').style.width = (s.total ? Math.round(100 * n / s.total) : 0) + '%';
-    $('progTxt').textContent = s.running ? `${n}/${s.total} · ${s.current || ''}` : (s.total ? `Terminé : ${s.done} ajouté(s), ${s.failed} introuvable(s)` : '');
-    $('batchStart').style.display = s.running ? 'none' : ''; $('batchStop').style.display = s.running ? '' : 'none';
+    const norm = s.kind === 'normalize';
+    $('progTxt').textContent = s.running ? `${norm ? '🔊 ' : ''}${n}/${s.total} · ${s.current || ''}` : (s.total ? (norm ? `Terminé : ${s.done} thème(s) vérifié(s), ${s.failed} en erreur` : `Terminé : ${s.done} ajouté(s), ${s.failed} introuvable(s)`) : '');
+    $('batchStart').style.display = s.running ? 'none' : ''; $('normStart').style.display = s.running ? 'none' : ''; $('batchStop').style.display = s.running ? '' : 'none';
+    $('batchLogBox').style.display = (s.messages || []).length ? '' : 'none'; $('batchLogTxt').textContent = (s.messages || []).join('\n');
     if (s.running) { clearTimeout(pollTimer); pollTimer = setTimeout(pollBatch, 2000); loadLibrary(true); }
     else if (pollTimer) { pollTimer = null; loadLibrary(true); }
 }
@@ -294,6 +353,10 @@ $('batchStart').addEventListener('click', async () => {
     const withSeasons = $('batchSeasons').checked;
     if (!confirm('Chercher et télécharger automatiquement les thèmes manquants (' + (withSeasons ? 'séries et saisons' : 'séries seulement') + ') ?')) return;
     const r = await post('/api/batch/start', {seasons: withSeasons}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+});
+$('normStart').addEventListener('click', async () => {
+    if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier data/themes-backup sur le serveur). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;
+    const r = await post('/api/normalize/start', {}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
 });
 $('batchStop').addEventListener('click', async () => { await post('/api/batch/stop'); });
 
@@ -320,8 +383,8 @@ function reportClientError(message, where) { if (clientErrors++ >= 5) return; fe
 window.addEventListener('error', e => reportClientError(e.message, (e.filename || '') + ':' + (e.lineno || '')));
 window.addEventListener('unhandledrejection', e => reportClientError('Promesse rejetée : ' + (e.reason && e.reason.message || e.reason), ''));
 
-$('filterText').addEventListener('input', renderList);
-$('filterState').addEventListener('change', renderList);
+$('filterText').addEventListener('input', () => { listCollapsed = false; renderList(); });
+$('filterState').addEventListener('change', () => { listCollapsed = false; renderList(); });
 loadLibrary().then(pollBatch);
 </script>
 </body>

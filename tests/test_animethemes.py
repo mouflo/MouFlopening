@@ -122,3 +122,18 @@ class TestAudio(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFindTheme(unittest.TestCase):
+    def test_find_theme(self):
+        import tempfile
+        from pathlib import Path
+        from src.library import find_theme
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            self.assertIsNone(find_theme(d))
+            (d / "theme-music").mkdir()
+            (d / "theme-music" / "naruto-theme.mp3").write_bytes(b"x")
+            self.assertEqual(find_theme(d).name, "naruto-theme.mp3")
+            (d / "theme.ogg").write_bytes(b"x")
+            self.assertEqual(find_theme(d).name, "theme.ogg")

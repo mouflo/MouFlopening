@@ -36,7 +36,7 @@ def measure_gain(path: Path) -> Optional[Tuple[float, float]]:
     return float(gain.group(1)), float(peak.group(1)) if peak else 1.0
 
 
-def convert_to_mp3(src: Path, dst: Path, target_db: float = REFERENCE_DB) -> bool:
+def convert_to_mp3(src: Path, dst: Path, target_db: float = REFERENCE_DB, quality: int = 2) -> bool:
     """Convertit src en MP3 (VBR haute qualité) ramené à target_db. True si succès."""
     measured = measure_gain(src)
     if measured is None:
@@ -46,7 +46,7 @@ def convert_to_mp3(src: Path, dst: Path, target_db: float = REFERENCE_DB) -> boo
 
     chain = f"volume={gain:.2f}dB,alimiter=limit=0.89:level=disabled"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vn", "-af", chain,
-           "-codec:a", "libmp3lame", "-q:a", "2", str(dst)]
+           "-codec:a", "libmp3lame", "-q:a", str(quality), str(dst)]
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=180)
     except FileNotFoundError:
@@ -62,3 +62,30 @@ def convert_to_mp3(src: Path, dst: Path, target_db: float = REFERENCE_DB) -> boo
         note = "" if abs(level - target_db) < 0.6 else " (limiteur actif : morceau très dynamique)"
         logger.info("[Audio] Niveau final mesuré : %.1f dB%s", level, note)
     return True
+
+
+def normalize_file(path: Path, target_db: float = REFERENCE_DB, tolerance: float = 0.5, backup_dir: Optional[Path] = None):
+    """
+    Ramène un MP3 existant à target_db, sur place. Retourne (statut, niveau avant, niveau après) :
+    « ok » (déjà au bon niveau, non modifié), « done » (normalisé) ou « error ».
+    L'original est copié dans backup_dir avant remplacement. Réencodage en qualité maximale (-q:a 0).
+    """
+    import shutil
+    import tempfile
+    measured = measure_gain(path)
+    if measured is None:
+        return "error", None, None
+    before = REFERENCE_DB - measured[0]
+    if abs(before - target_db) < tolerance:
+        return "ok", before, before
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "theme.mp3"
+        if not convert_to_mp3(path, out, target_db, quality=0):
+            return "error", before, None
+        check = measure_gain(out)
+        after = REFERENCE_DB - check[0] if check else None
+        if backup_dir is not None:
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, backup_dir / path.name)
+        shutil.move(str(out), str(path))
+    return "done", before, after
