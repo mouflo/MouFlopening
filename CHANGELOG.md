@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-10-05
+
+### Amélioré
+- La date de mise en ligne compte dans la recherche YouTube : avec l'année du dossier (« Titre (2025) »), une vidéo mise en ligne plus d'un an avant la sortie du film est fortement déclassée (sans rapport possible). L'année de mise en ligne s'affiche à côté de la durée dans chaque résultat
+- L'année du dossier est aussi ajoutée à deux des recherches (« <titre> 2025 theme »), et prise en compte par le téléchargement automatique
+
 ## [0.9.2] - 2026-10-05
 
 ### Corrigé

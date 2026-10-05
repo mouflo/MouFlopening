@@ -77,10 +77,33 @@ class YouTubeSource(BaseSource):
             score += 15
         return score
 
-    def candidates(self, title: str, media_type: str = "series", limit: int = 10) -> List[Dict[str, Any]]:
-        """Résultats classés ; même forme que AnimeThemes (un « groupe » par vidéo, avec un lecteur YouTube)."""
+    def _upload_years(self, entries: List[Dict[str, Any]]) -> None:
+        """Ajoute `_year` (année de mise en ligne) aux entrées : la recherche rapide ne donne pas la date."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(e):
+            if e.get("upload_date"):
+                e["_year"] = int(str(e["upload_date"])[:4])
+                return
+            try:
+                import yt_dlp
+                with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True,
+                                       "socket_timeout": 15, "noplaylist": True}) as ydl:
+                    info = ydl.extract_info(watch_url(e["id"]), download=False)
+                if info and info.get("upload_date"):
+                    e["_year"] = int(str(info["upload_date"])[:4])
+            except Exception:
+                pass                                       # pas de date : aucune pénalité
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            list(pool.map(one, entries))
+
+    def candidates(self, title: str, media_type: str = "series", limit: int = 10, year: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Résultats classés ; même forme que AnimeThemes (un « groupe » par vidéo, avec un lecteur YouTube).
+        year : année de sortie du film / de la série. Une vidéo mise en ligne bien avant n'a aucun rapport : elle est écartée."""
         from concurrent.futures import ThreadPoolExecutor
         queries = [f"{title} {k}" for k in self._keywords(media_type)]
+        if year:
+            queries += [f"{title} {year} theme", f"{title} {year} soundtrack"]
         with ThreadPoolExecutor(max_workers=len(queries)) as pool:
             batches = list(pool.map(lambda q: self._raw_search(q, 8), queries))
         seen, entries = set(), []
@@ -91,18 +114,29 @@ class YouTubeSource(BaseSource):
                     seen.add(vid)
                     entries.append(e)
         entries.sort(key=lambda e: -self._score(title, e))
+        entries = entries[:max(limit * 2, 14)]
+        if year:
+            self._upload_years(entries)
+            for e in entries:
+                u = e.get("_year")
+                if u:
+                    e["_bonus"] = 5 if u >= year - 1 else -70   # un thème ne peut pas dater d'avant le film (1 an de marge : bande-annonce)
+        entries.sort(key=lambda e: -(self._score(title, e) + e.get("_bonus", 0)))
         out = []
         for e in entries[:limit]:
             dur = int(e.get("duration") or 0)
-            out.append({"name": e.get("title", "?"), "year": f"{dur // 60}:{dur % 60:02d}" if dur else "",
+            label = f"{dur // 60}:{dur % 60:02d}" if dur else ""
+            if e.get("_year"):
+                label = f"{label} · {e['_year']}" if label else str(e["_year"])
+            out.append({"name": e.get("title", "?"), "year": label,
                         "channel": e.get("uploader") or e.get("channel") or "",
-                        "score": max(0, min(100, int(self._score(title, e)))),
+                        "score": max(0, min(100, int(self._score(title, e) + e.get("_bonus", 0)))),
                         "themes": [{"slug": "▶", "type": "yt", "youtube": e["id"], "url": watch_url(e["id"])}]})
         return out
 
-    def search(self, title: str, media_type: str = "series") -> Optional[ThemeResult]:
+    def search(self, title: str, media_type: str = "series", year: Optional[int] = None) -> Optional[ThemeResult]:
         """Meilleur résultat pour le mode automatique (None si rien de convaincant)."""
-        for c in self.candidates(title, media_type, limit=1):
+        for c in self.candidates(title, media_type, limit=1, year=year):
             if c["score"] >= 40:
                 return ThemeResult(title=c["name"], source=self.name, url=c["themes"][0]["url"])
         return None

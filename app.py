@@ -236,6 +236,12 @@ def _run_batch(limit, with_seasons, cat=0):
             BATCH.update(running=False, current="")
 
 
+def year_of(name):
+    """Année d'un dossier « Titre (2025) » (None si absente)."""
+    m = re.search(r"\(\s*((?:19|20)\d{2})\s*\)", name or "")
+    return int(m.group(1)) if m else None
+
+
 def original_title_for(series, title, kind):
     """Titre original : d'abord Emby, sinon TheMovieDB (dossier vide créé par Radarr, pas encore scanné…). -> (titre, remarque)"""
     orig, why = EMBY.original_title(series.name, title, kind, series.parent.name)
@@ -255,11 +261,12 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
     source = source_for(kind)
     with _work_lock:
         mtype = "anime" if kind == "anime" else ("movie" if kind == "movie" else "tv")
-        result = source.search(query, mtype)
+        extra = {"year": year_of(series.name)} if kind != "anime" else {}
+        result = source.search(query, mtype, **extra)
         if not result and number is None:             # rien sous le titre du dossier : on tente le titre original
             alt, _ = original_title_for(series, title, kind)
             if alt and alt.casefold() != query.casefold():
-                result = source.search(alt, mtype)
+                result = source.search(alt, mtype, **extra)
         if not result:
             return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
         ok, why = _download_replace(source, result.url, folder)
@@ -386,9 +393,10 @@ def api_search():
 
     titles = [title]
     note = ""
+    folder, series, _ = library.resolve_target(ROOTS, body.get("id", ""))
+    series_name = series.name if series else ""
     if body.get("original"):
-        # titre original d'après Emby (le titre français ne donne pas toujours de résultat)
-        folder, series, _ = library.resolve_target(ROOTS, body.get("id", ""))
+        # titre original d'après Emby / TheMovieDB (le titre français ne donne pas toujours de résultat)
         if series:
             orig, why = original_title_for(series, title, kind)
             if orig and orig.casefold() not in (t.casefold() for t in titles):
@@ -401,7 +409,7 @@ def api_search():
     def run(t):
         if kind == "anime":
             return SOURCE.candidates(t)
-        return YOUTUBE.candidates(t, "movie" if kind == "movie" else "series")
+        return YOUTUBE.candidates(t, "movie" if kind == "movie" else "series", year=year_of(series_name))
 
     results, seen = [], set()
     for t in titles:
