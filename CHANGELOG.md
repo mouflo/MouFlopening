@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.16.5] - 2026-10-05
+
+### Corrigé
+- « Introuvable dans Emby (pas encore scanné ?) » s'affichait à tort pour des films pourtant présents (Destination finale 4, Me Time - Enfin seul !, OSS 117, Terminator, Troie…) : la recherche texte d'Emby les ratait. L'application charge maintenant la liste complète des films/séries d'Emby (gardée 2 minutes) et retrouve chacun par le nom exact de son dossier (accents et majuscules ignorés, « Films HD » / « Films 4K » distingués). L'ancienne recherche reste en secours
+- Conséquence : l'identifiant TheMovieDB et le titre original d'Emby sont retrouvés, et Emby est bien rafraîchi après l'enregistrement d'un thème
+
 ## [0.16.4] - 2026-10-05
 
 ### Amélioré

@@ -9,6 +9,9 @@ Facultatifs : EMBY_URL, EMBY_REFRESH_MODE (ValidationOnly | Default | FullRefres
 import logging
 import os
 import re
+import threading
+import time
+import unicodedata
 from typing import Tuple, Any, Dict, List, Optional
 
 import requests
@@ -35,8 +38,9 @@ class EmbyClient:
 
     def _request(self, method: str, path: str, **kwargs):
         headers = {"X-Emby-Token": self.api_key, "Accept": "application/json"}
+        timeout = kwargs.pop("timeout", self.timeout)
         try:
-            resp = requests.request(method, self.host + path, headers=headers, timeout=self.timeout, **kwargs)
+            resp = requests.request(method, self.host + path, headers=headers, timeout=timeout, **kwargs)
         except requests.exceptions.ConnectionError:
             raise EmbyError(f"Emby injoignable ({self.host})")
         except requests.exceptions.Timeout:
@@ -49,14 +53,62 @@ class EmbyClient:
             raise EmbyError(f"Emby a répondu {resp.status_code}")
         return resp
 
+    # ------------------------------------------------------------------
+    # Retrouver un film / une série d'Emby d'après le NOM DE SON DOSSIER.
+    # La recherche texte d'Emby rate parfois des titres (tirets, « ! », titres traduits…) : on charge donc la liste
+    # complète des films (ou séries) une fois, on la garde 2 minutes, et on compare les chemins exactement.
+    # ------------------------------------------------------------------
+    _index_cache: Dict[str, Any] = {}
+    _index_lock = threading.Lock()
+
+    @staticmethod
+    def _norm(text: str) -> str:
+        return unicodedata.normalize("NFC", text or "").casefold().strip()
+
+    def _library_index(self, item_type: str):
+        """{nom de dossier normalisé: [éléments Emby]} pour tous les films (ou toutes les séries)."""
+        with self._index_lock:
+            hit = self._index_cache.get(item_type)
+            if hit and time.time() - hit[0] < 120:
+                return hit[1]
+            index: Dict[str, list] = {}
+            start, total, count = 0, None, 0
+            while total is None or start < total:
+                data = self._request("GET", "/Items", timeout=60, params={
+                    "Recursive": "true", "IncludeItemTypes": item_type, "Fields": "Path,OriginalTitle,ProviderIds",
+                    "StartIndex": start, "Limit": 500, "EnableTotalRecordCount": "true"}).json()
+                items = data.get("Items", []) if isinstance(data, dict) else []
+                total = int(data.get("TotalRecordCount") or 0) if isinstance(data, dict) else 0
+                if not items:
+                    break
+                for item in items:
+                    parts = [p for p in re.split(r"[\\/]", item.get("Path") or "") if p]
+                    for p in parts[:-1] if item_type == "Movie" else parts:     # film : le dernier élément est le fichier
+                        index.setdefault(self._norm(p), []).append((item, [self._norm(x) for x in parts]))
+                count += len(items)
+                start += len(items)
+            logger.info("[Emby] Liste des %s chargée : %d éléments", "films" if item_type == "Movie" else "séries", count)
+            self._index_cache[item_type] = (time.time(), index)
+            return index
+
     def _find_series(self, folder_name: str, titles: List[str], item_type: str = "Series", parent: str = ""):
+        want, par = self._norm(folder_name), self._norm(parent)
+        try:
+            for item, parts in self._library_index(item_type).get(want, []):
+                if not par or par in parts:                      # parent : distingue « Films HD » de « Films 4K »
+                    return item
+        except EmbyError:
+            raise
+        except Exception as e:
+            logger.warning("[Emby] Liste complète impossible (%s) : recherche par titre à la place", e)
+        # secours : recherche texte d'Emby
         for term in dict.fromkeys(t for t in [re.sub(r"\(\d{4}\)\s*$", "", folder_name).strip(), *titles] if t):
             data = self._request("GET", "/Items", params={
                 "Recursive": "true", "IncludeItemTypes": item_type, "SearchTerm": term,
                 "Fields": "Path,OriginalTitle,ProviderIds", "Limit": 30}).json()
             for item in data.get("Items", []) if isinstance(data, dict) else []:
-                parts = re.split(r"[\\/]", item.get("Path") or "")
-                if folder_name in parts and (not parent or parent in parts):   # parent : distingue « Films HD » de « Films 4K »
+                parts = [self._norm(p) for p in re.split(r"[\\/]", item.get("Path") or "")]
+                if want in parts and (not par or par in parts):
                     return item
         return None
 
