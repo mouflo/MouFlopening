@@ -166,8 +166,9 @@ def _batch_state_text():
         b = dict(BATCH)
     if not b["running"] and not b["total"]:
         return "aucun lot lancé depuis le démarrage"
-    return (f"{'EN COURS' if b['running'] else 'terminé'} · {b['done'] + b['failed']}/{b['total']} "
-            f"(ajoutés {b['done']}, introuvables {b['failed']}) · en cours : {b['current'] or '-'}")
+    norm = b.get("kind") == "normalize"
+    return (f"{'Normalisation' if norm else 'Téléchargement'} · {'EN COURS' if b['running'] else 'terminé'} · {b['done'] + b['failed']}/{b['total']} "
+            f"({'vérifiés' if norm else 'ajoutés'} {b['done']}, {'erreurs' if norm else 'introuvables'} {b['failed']}) · en cours : {b['current'] or '-'}")
 
 
 def _run_batch(limit, with_seasons, cat=0):

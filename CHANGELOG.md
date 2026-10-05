@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.2] - 2026-10-05
+
+### Corrigé
+- Téléchargement YouTube refusé (« HTTP Error 403: Forbidden ») : l'outil de téléchargement (yt-dlp) devient vite trop ancien quand YouTube change. Dans ce cas l'appli le met maintenant à jour toute seule (au plus une fois toutes les 6 h) puis réessaie
+
 ## [0.7.1] - 2026-10-05
 
 ### Corrigé

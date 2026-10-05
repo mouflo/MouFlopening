@@ -132,7 +132,7 @@ def build_report(version, roots, emby_state, batch_state):
         p = Path(r)
         lines.append(f"Médiathèque : {r} → " + ("accessible" if p.is_dir() else "INTROUVABLE")
                      + (f" · écriture {'OK' if p.is_dir() and __import__('os').access(r, 1 << 1) else 'IMPOSSIBLE'}" if p.is_dir() else ""))
-    lines += ["", "--- Téléchargement automatique ---", batch_state, "",
+    lines += ["", "--- Traitement en lot (téléchargement ou normalisation) ---", batch_state, "",
               "--- Journal de l'appli (150 dernières lignes) ---", _tail(LOG_FILE, 150)]
     lines += system_sections("mouflopening")
     return redact("\n".join(lines))

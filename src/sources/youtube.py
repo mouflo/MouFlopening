@@ -100,6 +100,19 @@ class YouTubeSource(BaseSource):
 
     # ------------------------------------------------------------------ téléchargement
 
+    def _yt_download(self, url: str, tmp: str) -> str:
+        """Télécharge l'audio dans tmp ; retourne « » si OK, sinon le message d'erreur."""
+        try:
+            import yt_dlp
+            opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
+                    "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
+                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {self.max_duration}")}
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+            return ""
+        except Exception as e:
+            return str(e)
+
     def download(self, url: str, output_path: Path) -> bool:
         if not self.is_allowed_url(url):
             return False
@@ -107,15 +120,11 @@ class YouTubeSource(BaseSource):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("[YouTube] Téléchargement : %s", url)
         with tempfile.TemporaryDirectory() as tmp:
-            try:
-                import yt_dlp
-                opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
-                        "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
-                        "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {self.max_duration}")}
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.download([url])
-            except Exception as e:
-                logger.error("[YouTube] Téléchargement impossible : %s", e)
+            err = self._yt_download(url, tmp)
+            if err and _looks_outdated(err) and _upgrade_ytdlp():
+                err = self._yt_download(url, tmp)          # une fois, avec la version à jour
+            if err:
+                logger.error("[YouTube] Téléchargement impossible : %s", err)
                 return False
             files = sorted(Path(tmp).glob("source.*"))
             if not files:
@@ -127,3 +136,42 @@ class YouTubeSource(BaseSource):
             safe_move(out, output_path)
         logger.info("[YouTube] ✅ Enregistré : %s", output_path)
         return True
+
+
+# ---------------------------------------------------------------------------
+# YouTube change souvent : quand yt-dlp est trop ancien (erreur 403, « Sign in »…), on le met à jour tout seul
+# ---------------------------------------------------------------------------
+
+_last_upgrade = 0.0
+
+
+def _looks_outdated(err: str) -> bool:
+    e = err.lower()
+    return any(k in e for k in ("403", "forbidden", "sign in to confirm", "unable to extract", "nsig", "signature", "http error 4"))
+
+
+def _upgrade_ytdlp() -> bool:
+    """Met yt-dlp à jour (au plus une fois toutes les 6 h). Retourne True si la mise à jour a réussi."""
+    global _last_upgrade
+    import subprocess
+    import sys
+    import time
+    if time.time() - _last_upgrade < 6 * 3600:
+        return False
+    _last_upgrade = time.time()
+    try:
+        logger.info("[YouTube] Mise à jour de yt-dlp…")
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "yt-dlp"],
+                           capture_output=True, text=True, timeout=240)
+        if r.returncode != 0:
+            logger.error("[YouTube] Mise à jour de yt-dlp impossible : %s", (r.stderr or r.stdout).strip()[-300:])
+            return False
+        for name in [m for m in sys.modules if m == "yt_dlp" or m.startswith("yt_dlp.")]:
+            del sys.modules[name]                  # rechargé à la prochaine utilisation
+        import importlib
+        importlib.invalidate_caches()
+        logger.info("[YouTube] yt-dlp mis à jour")
+        return True
+    except Exception as e:
+        logger.error("[YouTube] Mise à jour de yt-dlp impossible : %s", e)
+        return False
