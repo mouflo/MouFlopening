@@ -28,6 +28,7 @@ def lookup(kind: str, tmdb_id: int, timeout: float = 8) -> Tuple[Optional[dict],
         logger.info("[ThemerrDB] injoignable : %s", e)
         return None, "ThemerrDB injoignable"
     if r.status_code == 404:
+        logger.info("[ThemerrDB] %s %s : rien dans la base", path, tmdb_id)
         return None, "pas de thème dans ThemerrDB pour ce titre"
     if r.status_code >= 400:
         return None, f"ThemerrDB a répondu {r.status_code}"

@@ -32,6 +32,7 @@ def watch_url(video_id: str) -> str:
 
 class YouTubeSource(BaseSource):
     name = "YouTube"
+    _good_clients = None      # profil de lecteur qui a fonctionné en dernier (mémorisé tant que l'appli tourne)
 
     def __init__(self, config: Dict[str, Any], target_db: float = REFERENCE_DB):
         super().__init__(config)
@@ -171,7 +172,7 @@ class YouTubeSource(BaseSource):
         self.last_error = ""
         logger.info("[YouTube] Téléchargement : %s", url)
         with tempfile.TemporaryDirectory() as tmp:
-            err = self._yt_download(url, tmp)
+            err = self._yt_download(url, tmp, self._good_clients)       # le profil qui a marché la dernière fois d'abord
             if err and _looks_outdated(err):
                 if _upgrade_ytdlp():
                     err = self._yt_download(url, tmp)      # avec la version à jour
@@ -180,6 +181,7 @@ class YouTubeSource(BaseSource):
                         logger.info("[YouTube] Nouvel essai avec le profil %s", "+".join(clients))
                         err = self._yt_download(url, tmp, clients)
                         if not err:
+                            YouTubeSource._good_clients = clients      # on s'en souvient pour les prochains téléchargements
                             break
             if err:
                 try:

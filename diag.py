@@ -126,6 +126,7 @@ def build_report(version, roots, emby_state, batch_state):
         "",
         "--- Réglages ---",
         f"Emby : {emby_state}",
+        (lambda k: f"TheMovieDB : clé définie (…{k[-4:]})" if k else "TheMovieDB : AUCUNE clé (ThemerrDB et titres originaux indisponibles)")(__import__('os').getenv("TMDB_API_KEY", "").strip()),
         f"Niveau des thèmes : {__import__('os').getenv('_TARGET_DB', '89')} dB (ReplayGain / MP3Gain)",
     ]
     for r in roots:

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2] - 2026-10-05
+
+### Amélioré
+- Le journal indique maintenant ce qui se passe pour ThemerrDB et TheMovieDB (titre trouvé, identifiant, ou raison de l'échec), pour comprendre pourquoi une recherche ne donne rien
+- Quand YouTube refuse un téléchargement, le profil de connexion qui a fini par marcher est mémorisé et réessayé en premier la fois suivante
+- Le rapport de diagnostic indique si la clé TheMovieDB est définie (4 derniers caractères seulement)
+
 ## [0.11.1] - 2026-10-05
 
 ### Corrigé

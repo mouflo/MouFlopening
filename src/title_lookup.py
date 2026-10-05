@@ -70,7 +70,11 @@ def _best(folder_name: str, clean: str, kind: str, key: str):
 def tmdb_id(folder_name: str, clean: str, kind: str, key: str) -> Tuple[int, str]:
     """(identifiant TheMovieDB, remarque) ; 0 si introuvable."""
     best, why = _best(folder_name, clean, kind, key)
-    return (int(best["id"]), "") if best and best.get("id") else (0, why)
+    if best and best.get("id"):
+        logger.info("[TMDB] « %s » → identifiant %s (%s)", clean, best["id"], best.get("title") or best.get("name"))
+        return int(best["id"]), ""
+    logger.info("[TMDB] « %s » : %s", clean, why)
+    return 0, why
 
 
 def original_title(folder_name: str, clean: str, kind: str, key: str) -> Tuple[str, str]:
