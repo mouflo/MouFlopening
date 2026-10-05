@@ -151,7 +151,7 @@ def format_report(by_cat, seconds, now=None):
     now = now or datetime.now()
     added = sum(len(c["added"]) for c in by_cat)
     failed = sum(c["failed"] for c in by_cat)
-    nas = [c["nas_error"] for c in by_cat if c.get("nas_error")]
+    nas = list(dict.fromkeys(p for c in by_cat if c.get("nas_error") for p in c["nas_error"].split(", ")))   # chaque dossier une fois
     if not added and not failed and not nas:
         return None
     mins = max(1, round(seconds / 60))
