@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.12.1] - 2026-10-05
+
+### Corrigé
+- Sur téléphone, la progression en direct (recherche et « Utiliser ») est maintenant ramenée automatiquement à l'écran : plus besoin de faire défiler la page vers le bas pour la voir
+
 ## [0.12.0] - 2026-10-05
 
 ### Ajouté
