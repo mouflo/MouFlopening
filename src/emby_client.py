@@ -9,7 +9,7 @@ Facultatifs : EMBY_URL, EMBY_REFRESH_MODE (ValidationOnly | Default | FullRefres
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Tuple, Any, Dict, List, Optional
 
 import requests
 
@@ -60,15 +60,23 @@ class EmbyClient:
                     return item
         return None
 
-    def original_title(self, folder_name: str, title: str = "", kind: str = "series", parent: str = "") -> str:
-        """Titre original (anglais, japonais…) d'après Emby ; « » si Emby ne le connaît pas ou est injoignable."""
+    def original_title(self, folder_name: str, title: str = "", kind: str = "series", parent: str = "") -> Tuple[str, str]:
+        """(titre original d'après Emby, remarque). Le titre est « » si Emby ne le donne pas ; la remarque dit pourquoi."""
         if not self.configured:
-            return ""
+            return "", "Emby n'est pas configuré"
         try:
             item = self._find_series(folder_name, [title], "Movie" if kind == "movie" else "Series", parent)
-        except Exception:
-            return ""
-        return ((item or {}).get("OriginalTitle") or "").strip()
+        except Exception as e:
+            logger.warning("[Emby] Titre original impossible pour « %s » : %s", folder_name, e)
+            return "", f"Emby ne répond pas ({e})"
+        if not item:
+            logger.info("[Emby] « %s » introuvable dans Emby (titre original)", folder_name)
+            return "", "titre introuvable dans Emby"
+        orig = (item.get("OriginalTitle") or "").strip()
+        logger.info("[Emby] « %s » → nom Emby « %s », titre original « %s »", folder_name, item.get("Name"), orig or "(vide)")
+        if not orig:
+            return "", f"Emby n'a pas de titre original pour « {item.get('Name') or folder_name} »"
+        return orig, ""
 
     def _refresh_item(self, item_id: str) -> None:
         mode = os.getenv("EMBY_REFRESH_MODE", "ValidationOnly")

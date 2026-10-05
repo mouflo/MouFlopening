@@ -334,13 +334,18 @@ def api_search():
         kind = "anime"
 
     titles = [title]
+    note = ""
     if body.get("original"):
         # titre original d'après Emby (le titre français ne donne pas toujours de résultat)
         folder, series, _ = library.resolve_target(ROOTS, body.get("id", ""))
         if series:
-            orig = EMBY.original_title(series.name, title, kind, series.parent.name)
+            orig, why = EMBY.original_title(series.name, title, kind, series.parent.name)
             if orig and orig.casefold() not in (t.casefold() for t in titles):
-                titles.append(orig)
+                titles.insert(0, orig)                    # le titre original a plus de chances d'avoir des sources : on le cherche en premier
+            elif orig:
+                note = "Le titre original est identique au titre cherché"
+            else:
+                note = "Titre original non utilisé : " + why
 
     def run(t):
         if kind == "anime":
@@ -363,7 +368,7 @@ def api_search():
             seen.add(key)
             results.append(r)
     results.sort(key=lambda r: -int(r.get("score") or 0))
-    return jsonify({"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles})
+    return jsonify({"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note})
 
 
 @app.route("/api/save", methods=["POST"])

@@ -301,9 +301,10 @@ async function search() {
     const data = await post('/api/search', {title, cat: curCat, id: target.id, original: origOn});
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
-    if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
+    if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), (data.note ? data.note + '. ' : '') + 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
     $('cands').className = 'cands';
     if ((data.queries || []).length > 1) note($('msg'), 'Recherché sous : ' + data.queries.join(' · '), 'ok');
+    else if (data.note) note($('msg'), data.note, 'warn');
     $('cands').innerHTML = res.map((a, ai) => `
         <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.channel ? a.channel + ' · ' : '')}${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
         ${a.themes.map((t, ti) => `

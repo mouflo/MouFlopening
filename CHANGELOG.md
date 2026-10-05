@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.1] - 2026-10-05
+
+### Amélioré
+- Le titre original (d'après Emby) est maintenant cherché en premier
+- Quand le titre original ne peut pas être utilisé, la page dit pourquoi (titre introuvable dans Emby, ou pas de titre original renseigné dans Emby) et le Journal garde le détail (« nom Emby », « titre original »)
+
 ## [0.8.0] - 2026-10-05
 
 ### Amélioré
