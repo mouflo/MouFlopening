@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.16.1] - 2026-10-05
+
+### Amélioré
+- Quand ThemerrDB ne donne rien, la progression dit pourquoi et avec quel identifiant TheMovieDB la base a été interrogée (pour repérer une mauvaise correspondance de titre)
+
 ## [0.16.0] - 2026-10-05
 
 ### Amélioré

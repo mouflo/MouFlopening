@@ -325,7 +325,7 @@ def themerr_for(series, kind):
         tr, last = themerrdb.lookup(kind, tid)
         if tr:
             return tr, ""
-    return None, last
+    return None, f"{last} (identifiant TheMovieDB {', '.join(map(str, ids))})"
 
 
 def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
@@ -487,7 +487,7 @@ def _search_work(body):
     if series and kind != "anime":
         progress.say("Consultation de ThemerrDB (thème validé par la communauté)…")
         tr, _why = themerr_for(series, kind)
-        progress.say("ThemerrDB : thème trouvé ★" if tr else "ThemerrDB : rien pour ce titre")
+        progress.say("ThemerrDB : thème trouvé ★" if tr else f"ThemerrDB : rien — {_why or 'raison inconnue'}")
         if tr:
             from src.sources.youtube import watch_url
             seen.add(tr["video_id"])
