@@ -29,7 +29,7 @@ class TestDupes(unittest.TestCase):
             self.assertEqual([x["number"] for x in res["Bleach"]["dups"]], [2])
             self.assertEqual(res["Bleach"]["keep"], "1")
             self.assertNotIn("Film seul", res)
-            self.assertEqual(res["Naruto"]["dups"][0]["id"], "0/Naruto/Season 2")
+            self.assertEqual(res["Naruto"]["dups"][1]["id"], "0/Naruto/Season 2")
 
     def test_registre(self):
         with tempfile.TemporaryDirectory() as d:
