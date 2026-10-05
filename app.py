@@ -690,5 +690,30 @@ import tmdb_settings
 tmdb_settings.init_app(app, BASE_DIR)
 diag.init_app(app, APP_VERSION, lambda: ROOTS, EMBY.describe, _batch_state_text)
 
+def _clean_stale_partials():
+    """Un redémarrage (mise à jour) pendant un téléchargement laisse un « theme.nouveau.partiel » : on retire ceux de plus de 10 minutes."""
+    import time
+    n = 0
+    try:
+        for root in ROOTS:
+            for series in Path(root).iterdir():
+                if not series.is_dir():
+                    continue
+                for folder in [series] + [p for _n, p in library.season_folders(series)]:
+                    part = folder / "theme.nouveau.partiel"
+                    try:
+                        if part.is_file() and time.time() - part.stat().st_mtime > 600:
+                            part.unlink(); n += 1
+                    except OSError:
+                        pass
+    except OSError:
+        pass
+    if n:
+        logger.info("Fichiers partiels abandonnés supprimés : %d", n)
+
+
+threading.Thread(target=_clean_stale_partials, daemon=True).start()
+
+
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=8001)

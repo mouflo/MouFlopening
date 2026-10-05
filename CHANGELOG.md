@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.16.2] - 2026-10-05
+
+### Corrigé
+- Quand une mise à jour redémarre l'appli au milieu d'un téléchargement, le fichier temporaire « theme.nouveau.partiel » restait dans le dossier du film. Il est maintenant retiré automatiquement au démarrage (s'il date de plus de 10 minutes)
+
 ## [0.16.1] - 2026-10-05
 
 ### Amélioré
