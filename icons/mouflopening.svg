@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2d31"/><stop offset="1" stop-color="#121315"/></linearGradient>
+    <linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8be083"/><stop offset="1" stop-color="#52b54b"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="6" y="6" width="500" height="500" rx="106" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="4"/>
+  <g transform="translate(-34 0)">
+  <path d="M196 340 V150 L344 118 V308" fill="none" stroke="#f3f3f3" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M196 196 L344 164" fill="none" stroke="#f3f3f3" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="160" cy="344" rx="46" ry="36" fill="#f3f3f3"/>
+  <ellipse cx="308" cy="312" rx="46" ry="36" fill="#f3f3f3"/>
+  <path d="M400 190 q34 52 0 104" fill="none" stroke="url(#gr)" stroke-width="22" stroke-linecap="round"/>
+  <path d="M434 156 q60 86 0 172" fill="none" stroke="url(#gr)" stroke-width="22" stroke-linecap="round" opacity=".7"/>
+  </g>
+</svg>
