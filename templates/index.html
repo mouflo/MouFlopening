@@ -6,22 +6,11 @@
 <meta name="robots" content="noindex">
 <title>MouFlopening</title>
 <link rel="icon" type="image/svg+xml" href="/icons/mouflopening.svg"><link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/icons/manifest.webmanifest"><meta name="theme-color" content="#121315">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/mou-ui.css">
+<script src="/ui/mou-ui.js" defer></script>
 <style>
-    :root { --bg:#101010; --card:#1c1c1c; --field:#2a2a2a; --line:#3a3a3a; --text:#fff; --muted:#a0a0a0;
-            --accent:#52b54b; --accent-hover:#63c75c; --err:#e5534b; --warn:#e5a84b; }
-    * { box-sizing:border-box; }
-    html,body { margin:0; min-height:100%; }
-    body { background:var(--bg); color:var(--text); font-family:"Noto Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; padding:16px; }
+    body { padding:16px; }
     .container { max-width:1200px; margin:0 auto; }
-    .header { background:var(--card); border-radius:8px; padding:20px 24px; margin-bottom:16px; position:relative; }
-    .header h1 { margin:0; font-size:1.5rem; font-weight:600; }
-    .header h1 span { color:var(--accent); }
-    .header p { margin:4px 0 0; color:var(--muted); font-size:.9rem; }
-    .top-actions { position:absolute; top:14px; right:16px; display:flex; gap:8px; align-items:center; }
-    .version { color:#666; font-size:.75rem; margin-right:6px; }
     button, select, input[type=text] { font:inherit; }
     .btn { padding:9px 16px; border:0; border-radius:4px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
     .btn:hover { background:var(--accent-hover); }
@@ -43,10 +32,6 @@
     @media (max-width:800px) {
         body { padding:10px; }
         .layout { grid-template-columns:minmax(0,1fr); }        /* minmax(0,…) : un contenu large ne fait plus déborder la page */
-        .header { padding:16px; }
-        .header h1 { font-size:1.3rem; }
-        .top-actions { position:static; margin-top:12px; flex-wrap:wrap; }
-        .top-actions .version { width:100%; margin:0 0 2px; }
         .toolbar { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
         .toolbar .stat { padding:8px 12px; }
         .toolbar .btn, .toolbar .check, .progress { grid-column:1 / -1; }
@@ -64,10 +49,6 @@
         .cand h4 small { display:block; margin:2px 0 0; }
         .chip { padding:9px 14px; }
         .row { padding:12px; }
-        .modal { padding:0; align-items:stretch; }
-        .modal-box { max-width:none; max-height:none; height:100%; border-radius:0; }
-        .modal-box textarea { min-height:0; }
-        .modal-actions .btn { flex:1; padding:12px; }
     }
     .filters { display:flex; gap:8px; margin-bottom:10px; }
     .filters input, .filters select, .search-row input { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:9px 10px; outline:none; }
@@ -109,13 +90,6 @@
     .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
     .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
     .note.warn { background:rgba(229,168,75,.15); border:1px solid var(--warn); color:#f3d9a8; }
-    .modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:50; }
-    .modal.show { display:flex; }
-    .modal-box { background:var(--card); border-radius:8px; width:100%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; padding:18px; }
-    .modal-box h3 { margin:0 0 4px; }
-    .modal-sub { color:var(--muted); font-size:.85rem; margin-bottom:10px; }
-    .modal-box textarea { flex:1; min-height:300px; background:#0c0c0c; color:#d6d6d6; border:1px solid var(--line); border-radius:4px; padding:10px; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; resize:none; }
-    .modal-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
     .list.collapsed { max-height:none; }
     .list.collapsed .row:not(.active) { display:none; }
     .list.collapsed .row.active::after { content:"▾ changer"; color:var(--muted); font-size:.8rem; white-space:nowrap; }
@@ -126,20 +100,12 @@
     .batchlog { margin-bottom:16px; padding:10px 14px; }
     .batchlog summary { cursor:pointer; color:var(--muted); font-size:.9rem; }
     .batchlog pre { margin:10px 0 0; white-space:pre-wrap; word-break:break-word; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; color:#d6d6d6; max-height:40vh; overflow:auto; }
-    ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:5px; } ::-webkit-scrollbar-track { background:transparent; }
 </style>
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <div class="top-actions">
-            <span class="version">{{ version }}</span>
-            <button type="button" class="btn ghost small" id="logOpen">🩺 Journal</button>
-            <form method="post" action="/logout" style="margin:0"><button type="submit" class="btn ghost small">Se déconnecter</button></form>
-        </div>
-        <h1>🎵 Mou<span>Flopening</span></h1>
-        <p>Thèmes musicaux pour ta médiathèque Emby · chaque thème est normalisé à {{ target_db }} dB</p>
-    </div>
+    <div id="mou-header" data-app="mouflopening" data-prefix="MouFl" data-rest="opening" data-version="{{ version }}" data-emby="1"
+         data-sub="Thèmes musicaux pour ta médiathèque Emby · chaque thème est normalisé à {{ target_db }} dB"></div>
 
     <div class="tabs" id="tabs"></div>
 
@@ -173,20 +139,6 @@
 
         <div class="panel detail" id="detail">
             <div class="empty">Choisis une série dans la liste.</div>
-        </div>
-    </div>
-</div>
-
-<div class="modal" id="logModal">
-    <div class="modal-box">
-        <h3>🩺 Journal et diagnostic</h3>
-        <div class="modal-sub">État du serveur, réglages et dernières lignes du journal. Les clés sont masquées. Copie tout et colle-le dans la conversation.</div>
-        <textarea id="logText" readonly></textarea>
-        <div id="logStatus" class="note" style="display:none"></div>
-        <div class="modal-actions">
-            <button class="btn" id="logCopy">📋 Copier</button>
-            <button class="btn ghost" id="logRefresh">↻ Rafraîchir</button>
-            <button class="btn ghost" id="logClose">Fermer</button>
         </div>
     </div>
 </div>
@@ -397,72 +349,9 @@ $('normStart').addEventListener('click', async () => {
 });
 $('batchStop').addEventListener('click', async () => { await post('/api/batch/stop'); });
 
-// ---------- journal ----------
-function logStatus(msg, kind) { const el = $('logStatus'); el.style.display = msg ? 'block' : 'none'; el.textContent = msg || ''; el.className = 'note ' + (kind || 'ok'); }
-async function loadLog() {
-    $('logText').value = 'Chargement...';
-    try { const d = await api('/api/diagnostic'); $('logText').value = d.report || d.error || '(vide)'; $('logText').scrollTop = $('logText').scrollHeight; }
-    catch (e) { $('logText').value = 'Impossible de charger le rapport : ' + e.message; }
-}
-$('logOpen').addEventListener('click', () => { logStatus(''); $('logModal').classList.add('show'); document.body.style.overflow = 'hidden'; loadLog(); });
-$('logClose').addEventListener('click', () => { $('logModal').classList.remove('show'); document.body.style.overflow = ''; });
-$('logRefresh').addEventListener('click', () => { logStatus(''); loadLog(); });
-$('logCopy').addEventListener('click', async () => {
-    const box = $('logText'); let ok = false;
-    try { await navigator.clipboard.writeText(box.value); ok = true; }
-    catch (e) { box.focus(); box.select(); try { ok = document.execCommand('copy'); } catch (e2) {} }
-    logStatus(ok ? '✅ Copié : colle-le maintenant dans la conversation.' : '⚠️ Copie automatique impossible : le texte est sélectionné, fais « Copier » à la main.', ok ? 'ok' : 'warn');
-});
-
-// erreurs JavaScript -> journal du serveur
-let clientErrors = 0;
-function reportClientError(message, where) { if (clientErrors++ >= 5) return; fetch('/api/clientlog', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: String(message), where: where || ''})}).catch(() => {}); }
-window.addEventListener('error', e => reportClientError(e.message, (e.filename || '') + ':' + (e.lineno || '')));
-window.addEventListener('unhandledrejection', e => reportClientError('Promesse rejetée : ' + (e.reason && e.reason.message || e.reason), ''));
-
 $('filterText').addEventListener('input', () => { listCollapsed = false; renderList(); });
 $('filterState').addEventListener('change', () => { listCollapsed = false; renderList(); });
 loadLibrary().then(pollBatch);
-</script>
-<script>
-/* Réglage de la clé API Emby (enregistrée sur le serveur, jamais sur GitHub) */
-(function () {
-  var css = document.createElement('style');
-  css.textContent = '#embyKeyModal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:60}#embyKeyModal.show{display:flex}#embyKeyModal .ek-box{background:var(--card,#1f1f1f);color:var(--text,#eee);border-radius:8px;width:100%;max-width:480px;padding:18px;box-sizing:border-box}#embyKeyModal h3{margin:0 0 6px}#embyKeyModal p{color:var(--muted,#999);font-size:.85rem;margin:0 0 12px}#embyKeyModal input{width:100%;box-sizing:border-box;padding:10px;border-radius:4px;border:1px solid var(--line,#444);background:var(--field,#2a2a2a);color:inherit;font-size:1rem}#embyKeyModal .ek-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}#embyKeyModal button{padding:9px 14px;border-radius:4px;border:1px solid var(--line,#444);background:var(--field,#2a2a2a);color:inherit;cursor:pointer;font-size:.9rem;width:auto}#embyKeyModal button.ek-main{background:var(--accent,#52b54b);border-color:transparent;color:#fff}#embyKeyModal .ek-msg{margin-top:10px;font-size:.9rem;min-height:1.2em}';
-  document.head.appendChild(css);
-  var m = document.createElement('div'); m.id = 'embyKeyModal';
-  m.innerHTML = '<div class="ek-box"><h3>🔑 Clé API Emby</h3><p id="ekState">…</p>' +
-    '<input id="ekInput" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Colle la nouvelle clé ici">' +
-    '<div class="ek-msg" id="ekMsg"></div><div class="ek-row"><button id="ekTest" type="button">Tester</button>' +
-    '<button id="ekSave" type="button" class="ek-main">Enregistrer</button><button id="ekClose" type="button">Fermer</button></div></div>';
-  document.body.appendChild(m);
-  var $ = function (id) { return document.getElementById(id); };
-  function msg(t, ok) { $('ekMsg').textContent = t || ''; $('ekMsg').style.color = ok ? '#7fd477' : '#ff9b94'; }
-  async function call(body) {
-    var r = await fetch('/api/settings/emby', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-    if (r.status === 401) { location.href = '/login'; return {}; }
-    try { return await r.json(); } catch (e) { return {error: 'Erreur ' + r.status}; }
-  }
-  async function open() {
-    msg(''); $('ekInput').value = ''; m.classList.add('show');
-    try { var s = await (await fetch('/api/settings/emby')).json();
-      $('ekState').textContent = (s.configured ? 'Clé actuelle : ' + (s.hint || 'définie') : 'Aucune clé définie') + ' · Emby : ' + (s.host || '?');
-    } catch (e) { $('ekState').textContent = ''; }
-    $('ekInput').focus();
-  }
-  $('ekTest').onclick = async function () { msg('Test…', true); var r = await call({api_key: $('ekInput').value, test: true}); msg(r.message || r.error, r.ok); };
-  $('ekSave').onclick = async function () {
-    msg('Vérification…', true); var r = await call({api_key: $('ekInput').value});
-    msg(r.message || r.error, r.ok); if (r.ok) { $('ekInput').value = ''; setTimeout(function () { m.classList.remove('show'); }, 1800); }
-  };
-  $('ekClose').onclick = function () { m.classList.remove('show'); };
-  var anchor = $('logOpen');
-  if (anchor && anchor.parentNode) {
-    var b = document.createElement('button'); b.type = 'button'; b.id = 'embyKeyOpen';
-    b.className = anchor.className; b.textContent = '🔑 Clé Emby'; b.onclick = open;
-    anchor.parentNode.insertBefore(b, anchor);
-  }
-})();
 </script>
 </body>
 </html>

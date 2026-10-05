@@ -87,6 +87,34 @@ def _disk(path):
         return f"inaccessible ({e})"
 
 
+def _run_cmd(cmd, timeout=8):
+    import subprocess
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return (out.stdout or out.stderr or "").strip() or "(vide)"
+    except FileNotFoundError:
+        return "(commande indisponible)"
+    except subprocess.TimeoutExpired:
+        return "(délai dépassé)"
+    except Exception as e:
+        return f"(erreur : {e})"
+
+
+def system_sections(service):
+    """Sections communes à toutes les applis : déploiement automatique, cron et journal système du service."""
+    return [
+        "",
+        "--- Déploiement automatique (40 dernières lignes) ---",
+        _tail(Path(f"/var/log/{service}-deploy.log"), 40),
+        "",
+        "--- Cron (20 dernières lignes) ---",
+        _tail(Path(f"/var/log/{service}-cron.log"), 20),
+        "",
+        "--- Journal système du service (120 dernières lignes, erreurs Python comprises) ---",
+        _run_cmd(["journalctl", "-u", service, "-n", "120", "--no-pager", "-o", "short-iso"]),
+    ]
+
+
 def build_report(version, roots, emby_state, batch_state):
     lines = [
         f"=== Rapport MouFlopening · {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} ===",
@@ -106,6 +134,7 @@ def build_report(version, roots, emby_state, batch_state):
                      + (f" · écriture {'OK' if p.is_dir() and __import__('os').access(r, 1 << 1) else 'IMPOSSIBLE'}" if p.is_dir() else ""))
     lines += ["", "--- Téléchargement automatique ---", batch_state, "",
               "--- Journal de l'appli (150 dernières lignes) ---", _tail(LOG_FILE, 150)]
+    lines += system_sections("mouflopening")
     return redact("\n".join(lines))
 
 
