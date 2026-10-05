@@ -236,8 +236,22 @@ def _run_normalize():
         BATCH.update(kind="normalize", running=True, stop=False, total=len(files), done=0, failed=0, current="", messages=[])
     _batch_note(f"{len(files)} thème(s) MP3 à vérifier (cible {TARGET_DB:g} dB)" + (f" · {skipped_other} autre(s) format(s) ignoré(s)" if skipped_other else ""))
     changed = already = 0
+
+    def save_registry():
+        try:
+            NORMALIZED_FILE.parent.mkdir(parents=True, exist_ok=True)
+            NORMALIZED_FILE.write_text(json.dumps(registry))
+        except OSError:
+            pass
     try:
-        for label, path in files:
+        for n_seen, (label, path) in enumerate(files, 1):
+            if n_seen % 20 == 0:
+                save_registry()     # enregistré au fil de l'eau : un redémarrage (mise à jour) ne fait pas tout refaire
+            for leftover in path.parent.glob("*.partiel"):    # reste d'une copie interrompue (redémarrage en plein travail)
+                try:
+                    leftover.unlink()
+                except OSError:
+                    pass
             if BATCH["stop"]:
                 _batch_note("Arrêt demandé")
                 break
@@ -269,18 +283,16 @@ def _run_normalize():
                 _batch_note(f"🔊 {label} — {before:.1f} → {after:.1f} dB" if after is not None else f"🔊 {label} normalisé")
             else:
                 already += 1
+                registry[str(path)] = _signature(path)
             with _batch_lock:
                 BATCH["done"] += 1
-        try:
-            NORMALIZED_FILE.parent.mkdir(parents=True, exist_ok=True)
-            NORMALIZED_FILE.write_text(json.dumps(registry))
-        except OSError:
-            pass
+        save_registry()
         _batch_note(f"Terminé : {changed} normalisé(s), {already} déjà au bon niveau" + (f" · originaux dans {backup}" if changed else ""))
     except Exception:
         logger.exception("La normalisation s'est arrêtée sur une erreur")
         _batch_note("⚠️ Erreur inattendue (détails dans le Journal)")
     finally:
+        save_registry()
         with _batch_lock:
             BATCH.update(running=False, current="")
 

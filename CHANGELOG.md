@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.2] - 2026-10-05
+
+### Amélioré
+- Normalisation : l'avancement est enregistré au fil de l'eau (toutes les 20 thèmes). Si l'appli redémarre en plein traitement (mise à jour automatique), la relance ne refait pas ce qui était déjà fait
+- Les thèmes déjà au bon niveau sont aussi mémorisés ; les restes de copie interrompue (`*.partiel`) sont nettoyés
+
 ## [0.6.1] - 2026-10-05
 
 ### Corrigé
