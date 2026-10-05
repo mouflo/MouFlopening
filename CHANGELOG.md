@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.11.1] - 2026-10-05
+
+### Corrigé
+- Le numéro de version affiché en haut de la page (« v0.11.1 (abc1234) ») correspond maintenant à celui de ce journal des modifications. Avant, la page comptait les mises à jour (« v0.2.33 ») et ne correspondait à aucun numéro annoncé
+
 ## [0.11.0] - 2026-10-05
 
 ### Ajouté

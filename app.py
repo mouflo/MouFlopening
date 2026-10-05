@@ -53,13 +53,25 @@ from src.sources.base_source import ThemeResult
 BASE_VERSION = "0.2"
 
 
-def get_version():
+def _changelog_version():
+    """Numéro de version = la dernière entrée du CHANGELOG.md (celle que je décris à chaque mise à jour)."""
     try:
-        count = subprocess.check_output(["git", "rev-list", "--count", "HEAD"], cwd=BASE_DIR, text=True, stderr=subprocess.DEVNULL).strip()
+        m = re.search(r"^## \[(\d+\.\d+\.\d+)\]", (BASE_DIR / "CHANGELOG.md").read_text(encoding="utf-8"), re.M)
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
+
+
+def get_version():
+    num = _changelog_version()
+    try:
         short = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, text=True, stderr=subprocess.DEVNULL).strip()
+        if num:
+            return f"v{num} ({short})"
+        count = subprocess.check_output(["git", "rev-list", "--count", "HEAD"], cwd=BASE_DIR, text=True, stderr=subprocess.DEVNULL).strip()
         return f"v{BASE_VERSION}.{count} ({short})"
     except Exception:
-        return f"v{BASE_VERSION}"
+        return f"v{num or BASE_VERSION}"
 
 
 APP_VERSION = get_version()
