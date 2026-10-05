@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0] - 2026-10-05
+
+### Ajouté
+- Mise à jour automatique de yt-dlp : au démarrage de l'appli puis chaque jour (en attendant qu'aucun lot ne tourne). YouTube change souvent et yt-dlp suit : l'appli reste à jour sans intervention
+
+### Amélioré
+- Un `theme.mp3` vide ou tronqué (moins de 8 Ko : reste d'un ancien plugin ou d'un téléchargement cassé) compte maintenant comme « sans thème » : il réapparaît dans la liste, est pris en compte par le lot automatique, et l'ancien fichier est mis de côté au remplacement
+
 ## [0.17.1] - 2026-10-05
 
 ### Amélioré

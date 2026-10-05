@@ -268,13 +268,13 @@ def _looks_outdated(err: str) -> bool:
                                 "not available", "unavailable", "requested format", "player response"))
 
 
-def _upgrade_ytdlp() -> bool:
-    """Met yt-dlp à jour (au plus une fois toutes les 6 h). Retourne True si la mise à jour a réussi."""
+def _upgrade_ytdlp(force: bool = False) -> bool:
+    """Met yt-dlp à jour (au plus une fois toutes les 6 h, sauf force). Retourne True si la mise à jour a réussi."""
     global _last_upgrade
     import subprocess
     import sys
     import time
-    if time.time() - _last_upgrade < 6 * 3600:
+    if not force and time.time() - _last_upgrade < 6 * 3600:
         return False
     _last_upgrade = time.time()
     try:
@@ -293,3 +293,18 @@ def _upgrade_ytdlp() -> bool:
     except Exception as e:
         logger.error("[YouTube] Mise à jour de yt-dlp impossible : %s", e)
         return False
+
+
+def auto_update_loop(is_busy, first_delay=60, every=24 * 3600):
+    """Met yt-dlp à jour tout seul au démarrage puis chaque jour (YouTube change souvent, yt-dlp suit).
+    On attend qu'aucun lot ne tourne pour ne pas gêner un téléchargement en cours."""
+    import time
+    time.sleep(first_delay)
+    while True:
+        while is_busy():
+            time.sleep(300)
+        try:
+            _upgrade_ytdlp(force=True)
+        except Exception as e:
+            logger.error("[YouTube] Mise à jour automatique de yt-dlp en erreur : %s", e)
+        time.sleep(every)

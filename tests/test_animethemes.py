@@ -58,7 +58,7 @@ class TestLibrary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             for name in ["A", "B", "@eaDir", ".hidden"]:
                 (Path(d) / name).mkdir()
-            (Path(d) / "B" / "theme.mp3").write_bytes(b"x")
+            (Path(d) / "B" / "theme.mp3").write_bytes(b"x" * 9000)
             self.assertEqual([t for t, _ in missing_themes([d])], ["A"])
 
     def test_resolve_folder_refuses_escapes(self):
@@ -70,7 +70,7 @@ class TestLibrary(unittest.TestCase):
 
     def test_list_library_states(self):
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "A").mkdir(); (Path(d) / "B").mkdir(); (Path(d) / "B" / "theme.mp3").write_bytes(b"x")
+            (Path(d) / "A").mkdir(); (Path(d) / "B").mkdir(); (Path(d) / "B" / "theme.mp3").write_bytes(b"x" * 9000)
             self.assertEqual([(i["name"], i["has_theme"]) for i in list_library([d])], [("A", False), ("B", True)])
 
     def test_season_folders(self):
@@ -86,7 +86,7 @@ class TestLibrary(unittest.TestCase):
             s = Path(d) / "Serie"
             for n in ["Season 1", "Season 2", "Specials", "Extras"]:
                 (s / n).mkdir(parents=True)
-            (s / "Season 1" / "theme.mp3").write_bytes(b"x")
+            (s / "Season 1" / "theme.mp3").write_bytes(b"x" * 9000)
             lib = list_library([d])[0]
             self.assertEqual([(x["number"], x["has_theme"]) for x in lib["seasons"]], [(0, False), (1, True), (2, False)])
             self.assertEqual(resolve_target([d], "0/Serie/Season 2"), (s / "Season 2", s, 2))
@@ -133,9 +133,9 @@ class TestFindTheme(unittest.TestCase):
             d = Path(t)
             self.assertIsNone(find_theme(d))
             (d / "theme-music").mkdir()
-            (d / "theme-music" / "naruto-theme.mp3").write_bytes(b"x")
+            (d / "theme-music" / "naruto-theme.mp3").write_bytes(b"x" * 9000)
             self.assertEqual(find_theme(d).name, "naruto-theme.mp3")
-            (d / "theme.ogg").write_bytes(b"x")
+            (d / "theme.ogg").write_bytes(b"x" * 9000)
             self.assertEqual(find_theme(d).name, "theme.ogg")
 
 

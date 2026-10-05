@@ -16,17 +16,28 @@ THEME_DIR = "theme-music"
 IGNORED_DIRS = {"@eaDir", "@tmp", "@__thumb", ".@__thumb", ".@tmp", ".hidden", ".trashes", "#recycle"}
 
 
+MIN_THEME_BYTES = 8 * 1024     # en dessous, le fichier est vide ou tronqué (reste d'un plugin ou d'un téléchargement cassé)
+
+
+def _usable(f: Path) -> bool:
+    """Un vrai fichier audio, pas un theme.mp3 vide ou corrompu : il compte alors comme « sans thème » et sera remplacé."""
+    try:
+        return f.is_file() and f.stat().st_size >= MIN_THEME_BYTES
+    except OSError:
+        return False
+
+
 def find_theme(folder: Path) -> Optional[Path]:
-    """Le thème d'un dossier tel qu'Emby le voit (theme.mp3 d'abord), ou None."""
+    """Le thème d'un dossier tel qu'Emby le voit (theme.mp3 d'abord), ou None (fichier absent, vide ou tronqué)."""
     for ext in THEME_EXTS:
         f = folder / f"theme{ext}"
-        if f.is_file():
+        if _usable(f):
             return f
     d = folder / THEME_DIR
     try:
         if d.is_dir():
             for f in sorted(d.iterdir()):
-                if f.is_file() and f.suffix.lower() in THEME_EXTS:
+                if _usable(f) and f.suffix.lower() in THEME_EXTS:
                     return f
     except OSError:
         pass

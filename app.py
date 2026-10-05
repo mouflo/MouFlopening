@@ -721,6 +721,8 @@ def _clean_stale_partials():
 
 
 threading.Thread(target=_clean_stale_partials, daemon=True).start()
+from src.sources import youtube as _yt_module
+threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")),), daemon=True).start()
 
 
 if __name__ == "__main__":
