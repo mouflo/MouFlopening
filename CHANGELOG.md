@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.23.1] - 2026-10-05
+
+### Corrigé
+- Éditeur audio : la vidéo YouTube (ou le son) en cours d'écoute se coupe dès qu'on lance l'édition, au lieu de continuer à jouer pendant qu'on coupe le son
+
 ## [0.23.0] - 2026-10-05
 
 ### Ajouté
