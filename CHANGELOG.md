@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.21.1] - 2026-10-05
+
+### Corrigé
+- Une saison (y compris la saison 1) qui aurait exactement le même thème que la série n'est plus enregistrée, et le contrôle « Doublons de saisons » la signale aussi : une saison sans fichier propre reprend la musique de la série, alors qu'un fichier identique mais distinct peut faire repartir la musique en entrant dans la saison
+
 ## [0.21.0] - 2026-10-05
 
 ### Ajouté

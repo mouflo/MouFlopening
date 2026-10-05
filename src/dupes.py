@@ -71,7 +71,7 @@ def find_duplicates(roots: List[str], skip_roots: Optional[set] = None) -> List[
                 if len(labels) < 2:
                     continue
                 keep = "série" if "série" in labels else min((l for l in labels), key=lambda x: int(x))
-                dups = [l for l in labels if l != keep and not (keep == "série" and l == "1")]    # saison 1 = série : normal
+                dups = [l for l in labels if l != keep]
                 result.append({"series": library.clean_title(series.name), "keep": keep,
                                "dups": [{"number": int(l), "id": f"{ri}/{series.name}/{dict((str(n), f) for n, f in seasons)[l].name}"} for l in dups]})
     return result

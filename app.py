@@ -377,13 +377,13 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
                     result = source.search(alt, mtype)
             if not result:
                 return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
-            if number is not None and number >= 2:    # saison 2 et suivantes : jamais le même thème que la série ou une autre saison
+            if number is not None:                     # saison : jamais le même thème que la série ou une autre saison
                 from src import dupes
                 known = dupes.load_sources(SOURCES_FILE)
                 if any(known.get(str(f)) == result.url for f, _t in dupes.sibling_themes(series, folder)):
                     return False, f"AnimeThemes n'a pas de fiche propre à la saison {number} (même thème que la série ou une autre saison) : à choisir à la main"
         ok, why = _download_replace(source, result.url, folder, trusted=(kind != "anime"),
-                                    forbid_same_as=series if (kind == "anime" and number is not None and number >= 2) else None)   # films/séries : vidéo choisie par ThemerrDB
+                                    forbid_same_as=series if (kind == "anime" and number is not None) else None)   # films/séries : vidéo choisie par ThemerrDB
         if not ok:
             return False, why
     emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
