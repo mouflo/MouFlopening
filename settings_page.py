@@ -19,6 +19,7 @@ from src import library, ytcookies
 
 logger = logging.getLogger(__name__)
 _URL_RE = re.compile(r"^https?://[^\s/]+(:\d{1,5})?(/\S*)?$")
+_BAD_CHARS = set('"$`\\\n\r')     # interdits : ils casseraient le fichier data/secrets.env
 
 
 def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby, backup_default, get_db=None, set_db=None):
@@ -61,7 +62,7 @@ def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby,
     @app.route("/api/settings/emby-host", methods=["POST"])
     def emby_host_save():
         host = str((request.get_json(silent=True) or {}).get("host", "")).strip().rstrip("/")
-        if not _URL_RE.match(host):
+        if not _URL_RE.match(host) or _BAD_CHARS & set(host):
             return jsonify({"ok": False, "error": "Adresse invalide : elle doit ressembler à http://192.168.1.134:8096"}), 400
         _write_secret(base_dir / "data" / "secrets.env", "EMBY_URL", host)
         os.environ["EMBY_URL"] = host
