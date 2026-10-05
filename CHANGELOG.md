@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0] - 2026-10-05
+
+### Ajouté
+- Éditeur audio « ✂️ » : courbe du son, zoom (boutons ➕ ➖, pincement au doigt, molette), défilement, poignées verte (début) et rouge (fin) pour couper les parties indésirables (intro de chaîne…), boutons « Début ici » / « Fin ici » pour une coupe précise à l'oreille, écoute de la partie gardée avec aperçu des fondus, fondu d'entrée et de sortie réglables. Pensé pour le téléphone
+- Accessible depuis : « ✂️ Éditer ce thème » (thème actuel), le bouton ✂️ à côté de « Utiliser » sur chaque proposition, et « ✂️ Éditer d'abord » dans « Utiliser mon propre thème » (lien ou fichier)
+- À l'enregistrement le thème est converti en MP3 et remis au volume habituel ; l'ancien thème est mis de côté (pas supprimé). Les copies de travail sont effacées au bout de 6 h
+
 ## [0.22.0] - 2026-10-05
 
 ### Ajouté

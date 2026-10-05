@@ -719,6 +719,133 @@ def api_custom_file():
     return jsonify({"job": progress.start(lambda: _custom_file_work(item_id, title, tmp_src, name))})
 
 
+# ---------- éditeur audio : découper et ajouter des fondus avant d'enregistrer ----------
+from src import audioedit
+
+
+def _stage_work(item_id, kind_src, url=None, upload=None, upload_name=""):
+    """Prépare la copie de travail (thème actuel, lien ou fichier envoyé). -> ({token, duration, name}, 200) ou erreur"""
+    import tempfile
+    folder, series, number = library.resolve_target(ROOTS, item_id)
+    if not folder:
+        return {"error": "Série ou saison introuvable"}, 404
+    try:
+        with tempfile.TemporaryDirectory() as work:
+            if kind_src == "current":
+                cur = find_theme(folder)
+                if not cur:
+                    return {"error": "Pas de thème à éditer"}, 404
+                src, label = cur, "thème actuel"
+            elif kind_src == "file":
+                src, label = Path(upload), upload_name
+            else:
+                bad = _public_url(url)
+                if bad:
+                    return {"error": bad}, 400
+                src = Path(work) / "source.mp3"
+                source = SOURCE if SOURCE.is_allowed_url(url) else YOUTUBE
+                with _work_lock:
+                    ok = (source.download(url, src, trusted=True) if source is YOUTUBE else source.download(url, src))
+                if not ok:
+                    return {"error": "Téléchargement impossible : " + (getattr(source, "last_error", "") or "détails dans le Journal")}, 502
+                label = "lien"
+            progress.say("Préparation de la courbe du son…")
+            st = audioedit.stage(BASE_DIR, src)
+        if not st:
+            return {"error": "Ce fichier n'a pas pu être lu comme un son (détails : bouton Journal)."}, 502
+        return {**st, "name": label}, 200
+    finally:
+        if upload:
+            try:
+                os.unlink(upload)
+            except OSError:
+                pass
+
+
+@app.route("/api/edit/stage", methods=["POST"])
+def api_edit_stage():
+    data = request.get_json(silent=True) or {}
+    item_id, src, url = data.get("id", ""), data.get("source", "current"), str(data.get("url", "")).strip()
+    return jsonify({"job": progress.start(lambda: _stage_work(item_id, src, url))})
+
+
+@app.route("/api/edit/stage-file", methods=["POST"])
+def api_edit_stage_file():
+    f = request.files.get("file")
+    if not f or not f.filename or not f.filename.lower().endswith(AUDIO_EXTS):
+        return jsonify({"error": "Choisis un fichier audio (mp3, m4a, flac, ogg, wav…)"}), 400
+    if (request.content_length or 0) > MAX_UPLOAD:
+        return jsonify({"error": "Fichier trop gros (150 Mo maximum)"}), 413
+    import tempfile
+    fd, tmp_src = tempfile.mkstemp(suffix=Path(f.filename).suffix.lower())
+    os.close(fd)
+    f.save(tmp_src)
+    item_id, name = request.form.get("id", ""), Path(f.filename).name
+    return jsonify({"job": progress.start(lambda: _stage_work(item_id, "file", None, tmp_src, name))})
+
+
+def _edit_path(token, ext):
+    if not audioedit.valid_token(token):
+        return None
+    p = audioedit.edit_dir(BASE_DIR) / f"{token}.{ext}"
+    return p if p.is_file() else None
+
+
+@app.route("/api/edit/<token>/peaks")
+def api_edit_peaks(token):
+    p = _edit_path(token, "json")
+    if not p:
+        return jsonify({"error": "Copie de travail expirée : recommence l'édition"}), 404
+    return send_file(p, mimetype="application/json")
+
+
+@app.route("/api/edit/<token>/audio")
+def api_edit_audio(token):
+    p = _edit_path(token, "mp3")
+    if not p:
+        return jsonify({"error": "Copie de travail expirée"}), 404
+    return send_file(p, mimetype="audio/mpeg", conditional=True)
+
+
+def _edit_save_work(token, item_id, title, start, end, fade_in, fade_out):
+    import tempfile
+    src = _edit_path(token, "mp3")
+    if not src:
+        return {"error": "Copie de travail expirée : recommence l'édition"}, 404
+    total = audioedit.duration(src) or 0
+    start, end = max(0.0, start), min(total, end) if total else end
+    if end - start < 1.0:
+        return {"error": "La partie gardée doit durer au moins 1 seconde"}, 400
+    half = (end - start) / 2
+    fade_in, fade_out = min(max(0.0, fade_in), half), min(max(0.0, fade_out), half)
+    fd, tmp = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    progress.say("Découpe et fondus…")
+    if not audioedit.render(src, Path(tmp), start, end, fade_in, fade_out):
+        os.unlink(tmp)
+        return {"error": "La découpe a échoué (détails : bouton Journal)"}, 502
+    res = _custom_file_work(item_id, title, tmp, f"édité ({end - start:.1f} s)")      # conversion, volume, mise en place, Emby (supprime tmp)
+    if res[1] == 200:
+        for ext in ("mp3", "json"):
+            try:
+                (audioedit.edit_dir(BASE_DIR) / f"{token}.{ext}").unlink()
+            except OSError:
+                pass
+    return res
+
+
+@app.route("/api/edit/<token>/save", methods=["POST"])
+def api_edit_save(token):
+    d = request.get_json(silent=True) or {}
+    try:
+        start, end, fi, fo = (float(d.get(k, 0) or 0) for k in ("start", "end", "fade_in", "fade_out"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Valeurs invalides"}), 400
+    if not audioedit.valid_token(token):
+        return jsonify({"error": "Copie de travail inconnue"}), 404
+    return jsonify({"job": progress.start(lambda: _edit_save_work(token, d.get("id", ""), d.get("title", ""), start, end, fi, fo))})
+
+
 @app.route("/api/duplicates")
 def api_duplicates():
     from src import dupes

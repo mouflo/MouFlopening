@@ -8,6 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="/icons/mouflopening.svg"><link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/icons/manifest.webmanifest"><meta name="theme-color" content="#121315">
 <link rel="stylesheet" href="/ui/mou-ui.css?v={{ version|urlencode }}">
 <script src="/ui/mou-ui.js?v={{ version|urlencode }}" defer></script>
+<script src="/ui/audio-editor.js?v={{ version|urlencode }}" defer></script>
 <style>
     body { padding:16px; }
     .container { max-width:1200px; margin:0 auto; }
@@ -326,8 +327,8 @@ function renderDetail() {
         <details class="custom" id="customBox">
             <summary>🎵 Utiliser mon propre thème (lien ou fichier)</summary>
             <div class="hint">Un lien YouTube (ou autre site : SoundCloud…) ou un fichier audio de ton ordinateur. Il remplace le thème actuel (l'ancien est mis de côté, pas supprimé) et est mis au même volume que les autres.</div>
-            <div class="search-row"><input type="text" id="customUrl" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="customUrlGo">Utiliser ce lien</button></div>
-            <div class="search-row"><input type="file" id="customFile" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma"><button class="btn" id="customFileGo">Envoyer ce fichier</button></div>
+            <div class="search-row"><input type="text" id="customUrl" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="customUrlGo">Utiliser ce lien</button><button class="btn ghost" id="customUrlEdit">✂️ Éditer d'abord</button></div>
+            <div class="search-row"><input type="file" id="customFile" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma"><button class="btn" id="customFileGo">Envoyer ce fichier</button><button class="btn ghost" id="customFileEdit">✂️ Éditer d'abord</button></div>
         </details>
         <label class="opt"><input type="checkbox" id="optOrig" ${origOn ? 'checked' : ''}> Chercher aussi sous le titre original (d'après Emby)</label>
         <div id="msg"></div>
@@ -348,6 +349,8 @@ function renderDetail() {
         $('customUrlGo').disabled = $('customFileGo').disabled = true;
         customDone(await runJob('/api/custom/url', {id: target.id, url, title: selected.title}, customProgress));
     });
+    $('customUrlEdit').addEventListener('click', () => { const url = $('customUrl').value.trim(); if (!url) return note($('msg'), 'Colle d\'abord un lien.', 'err'); startEdit('url', url); });
+    $('customFileEdit').addEventListener('click', () => { const f = $('customFile').files[0]; if (!f) return note($('msg'), 'Choisis d\'abord un fichier audio.', 'err'); startEdit('file', f); });
     $('customFileGo').addEventListener('click', async () => {
         const f = $('customFile').files[0]; if (!f) return note($('msg'), 'Choisis d\'abord un fichier audio.', 'err');
         if (!customAsk()) return;
@@ -391,6 +394,19 @@ function refreshSkip() {
     });
 }
 
+// ---------- éditeur audio : couper les parties indésirables, fondus ----------
+async function startEdit(kind, arg) {
+    if (!window.MouEditor) return note($('msg'), 'L\'éditeur n\'est pas chargé : recharge la page.', 'err');
+    const progress = (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); };
+    let r;
+    if (kind === 'file') { const form = new FormData(); form.append('file', arg); form.append('id', target.id); r = await runJob('/api/edit/stage-file', form, progress); }
+    else r = await runJob('/api/edit/stage', {id: target.id, source: kind, url: arg || ''}, progress);
+    if (r.error) return note($('msg'), r.error, 'err');
+    note($('msg'), '');
+    MouEditor.open({token: r.token, name: r.name, id: target.id, title: selected.title,
+        onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; loadLibrary(true); }});
+}
+
 // Suppression d'un thème : deux validations successives (le fichier est mis de côté, pas détruit)
 function deleteStep(step) {
     const row = $('delRow'); if (!row) return;
@@ -418,8 +434,8 @@ function refreshCurrent() {
     $('hint').textContent = target.number === 0 ? 'Emby associe un thème à un dossier, pas à un fichier : ce thème sera lu pour tous les épisodes et films du dossier Spéciaux. Le mode automatique ne traite pas les Spéciaux : choisis-le ici.' : '';
     $('current').innerHTML = target.has_theme
         ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio>
-           <div id="delRow"><button class="btn danger small" id="btnDel">🗑 Supprimer ce thème</button></div></div>` : '';
-    if (target.has_theme) $('btnDel').addEventListener('click', () => deleteStep(1));
+           <div id="delRow"><button class="btn ghost small" id="btnEditCur">✂️ Éditer ce thème</button> <button class="btn danger small" id="btnDel">🗑 Supprimer ce thème</button></div></div>` : '';
+    if (target.has_theme) { $('btnDel').addEventListener('click', () => deleteStep(1)); $('btnEditCur').addEventListener('click', () => startEdit('current')); }
 }
 
 const blockedVideos = new Set();     // vidéos de ThemerrDB que YouTube refuse de télécharger : on les écarte des propositions
@@ -449,7 +465,8 @@ async function search(full) {
         ${a.themes.map((t, ti) => `
             <div class="theme"><span class="slug">${esc(t.slug)}</span>
             ${t.youtube ? `<button class="btn ghost small ytbtn" data-yt="${esc(t.youtube)}">▶ Écouter</button>` : `<audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>`}
-            <button class="btn small" data-a="${ai}" data-t="${ti}">Utiliser</button></div>`).join('')}
+            <button class="btn small" data-a="${ai}" data-t="${ti}">Utiliser</button>
+            <button class="btn ghost small" data-edit="${ai}/${ti}" title="Couper / fondus avant d'enregistrer">✂️</button></div>`).join('')}
         </div>`).join('');
     // Une seule écoute à la fois : lancer un thème arrête (et ferme) celui qui jouait
     function stopPlayers(except) {
@@ -493,6 +510,9 @@ async function search(full) {
             $('cands').classList.add('collapsed');
             loadLibrary(true);
         }
+    }));
+    document.querySelectorAll('#cands button[data-edit]').forEach(b => b.addEventListener('click', () => {
+        const [a, t] = b.dataset.edit.split('/'); const th = res[a].themes[t]; startEdit('url', th.url || th.audio || th.video);
     }));
     document.querySelectorAll('.cand').forEach(c => c.addEventListener('click', e => {
         if ($('cands').classList.contains('collapsed') && c.classList.contains('chosen') && !e.target.closest('audio,button')) $('cands').classList.remove('collapsed');
