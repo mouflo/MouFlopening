@@ -311,9 +311,27 @@ async function search() {
             ${t.youtube ? `<button class="btn ghost small ytbtn" data-yt="${esc(t.youtube)}">▶ Écouter</button>` : `<audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>`}
             <button class="btn small" data-a="${ai}" data-t="${ti}">Utiliser</button></div>`).join('')}
         </div>`).join('');
-    document.querySelectorAll('#cands .ytbtn').forEach(b => b.addEventListener('click', () => {
-        b.outerHTML = `<iframe class="ytplay" src="https://www.youtube.com/embed/${encodeURIComponent(b.dataset.yt)}?autoplay=1" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
-    }));
+    // Une seule écoute à la fois : lancer un thème arrête (et ferme) celui qui jouait
+    function stopPlayers(except) {
+        document.querySelectorAll('#cands iframe.ytplay').forEach(f => {
+            if (f === except) return;
+            const btn = document.createElement('button');
+            btn.className = 'btn ghost small ytbtn'; btn.dataset.yt = f.dataset.yt; btn.textContent = '▶ Écouter';
+            btn.addEventListener('click', () => startYt(btn));
+            f.replaceWith(btn);
+        });
+        document.querySelectorAll('#cands audio').forEach(a => { if (a !== except) a.pause(); });
+    }
+    function startYt(b) {
+        stopPlayers(null);
+        const f = document.createElement('iframe');
+        f.className = 'ytplay'; f.dataset.yt = b.dataset.yt;
+        f.src = 'https://www.youtube.com/embed/' + encodeURIComponent(b.dataset.yt) + '?autoplay=1';
+        f.referrerPolicy = 'strict-origin-when-cross-origin'; f.allow = 'autoplay; encrypted-media'; f.allowFullscreen = true;
+        b.replaceWith(f);
+    }
+    document.querySelectorAll('#cands .ytbtn').forEach(b => b.addEventListener('click', () => startYt(b)));
+    document.querySelectorAll('#cands audio').forEach(a => a.addEventListener('play', () => stopPlayers(a)));
     document.querySelectorAll('#cands button[data-a]').forEach(b => b.addEventListener('click', async () => {
         const t = res[b.dataset.a].themes[b.dataset.t];
         b.disabled = true; b.textContent = '…';

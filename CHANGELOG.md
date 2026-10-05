@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.3] - 2026-10-05
+
+### Corrigé
+- Écoute : lancer un thème arrête et ferme celui qui jouait déjà (lecteur YouTube comme lecteur audio d'AnimeThemes). Un seul thème à la fois
+
 ## [0.7.2] - 2026-10-05
 
 ### Corrigé
