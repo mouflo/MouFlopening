@@ -433,7 +433,9 @@ async function pollBatch() {
 }
 $('batchStart').addEventListener('click', async () => {
     const withSeasons = $('batchSeasons').checked && catKind() !== 'movie';
-    if (!confirm('Chercher et télécharger automatiquement les thèmes manquants de « ' + ((cats[curCat] || {}).name || '') + ' » sur ' + sourceName() + ' (' + (withSeasons ? 'séries et saisons' : catKind() === 'movie' ? 'films' : 'séries seulement') + ') ?' + (catKind() === 'anime' ? '' : '\n\nSur YouTube le choix automatique est moins fiable que pour les animes : tu pourras corriger à la main ensuite.'))) return;
+    const anime = catKind() === 'anime';
+    if (!confirm(anime ? 'Chercher et télécharger automatiquement les thèmes manquants de « ' + ((cats[curCat] || {}).name || '') + ' » sur AnimeThemes (' + (withSeasons ? 'séries et saisons' : 'séries seulement') + ') ?'
+        : 'Télécharger les thèmes manquants de « ' + ((cats[curCat] || {}).name || '') + ' » ?\n\nSeuls les thèmes validés par la communauté (ThemerrDB) sont pris. Les autres titres sont ignorés : tu les cherches à la main.')) return;
     const r = await post('/api/batch/start', {seasons: withSeasons, cat: curCat}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
 });
 $('normStart').addEventListener('click', async () => {

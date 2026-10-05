@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.14.0] - 2026-10-05
+
+### Corrigé
+- **Films et séries : le téléchargement de tous les thèmes manquants ne prend plus que les thèmes validés par la communauté (ThemerrDB).** Avant, il choisissait tout seul la première vidéo YouTube à peu près ressemblante, et validait n'importe quoi. Maintenant, si ThemerrDB ne connaît pas le titre, on passe directement au suivant (le titre reste dans « sans thème » pour une recherche à la main). Les animes continuent d'utiliser AnimeThemes
+- Pour les films et séries, le lot ne traite plus les saisons (ThemerrDB ne connaît que le film ou la série entière)
+
 ## [0.13.1] - 2026-10-05
 
 ### Amélioré

@@ -234,7 +234,7 @@ def _run_batch(limit, with_seasons, cat=0):
     kind = CATS[cat]["kind"]
     roots = list(CATS[cat]["paths"])
     todo = [("film" if kind == "movie" else "série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
-    if with_seasons and kind != "movie":
+    if with_seasons and kind == "anime":          # films et séries : seul ThemerrDB est accepté, et il ne connaît pas les saisons
         todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
     sk = skipped.all_keys()
     n_all = len(todo)
@@ -255,10 +255,10 @@ def _run_batch(limit, with_seasons, cat=0):
             with _batch_lock:
                 BATCH["current"] = label
             ok, msg = _auto_one(folder, title, series, number, kind=kind)   # kind = type de l'onglet (anime / série / film)
-            if not ok:
-                skipped.add(folder)
-            else:
+            if ok:
                 skipped.remove(folder)
+            elif kind == "anime":              # films et séries : « pas dans ThemerrDB » ne veut pas dire « introuvable » (recherche à la main possible)
+                skipped.add(folder)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
@@ -301,26 +301,31 @@ def themerr_for(series, kind):
 
 
 def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
-    """Choisit automatiquement le meilleur générique, l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
+    """Choisit automatiquement le générique (animes : AnimeThemes ; films et séries : uniquement ThemerrDB), l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
     series = series or folder
     query = query or (title if number is None else library.season_query(title, number))
     source = source_for(kind)
     with _work_lock:
         mtype = "anime" if kind == "anime" else ("movie" if kind == "movie" else "tv")
         result = None
-        if number is None:                            # ThemerrDB : thème validé par des humains, à essayer avant la recherche YouTube
-            tr, _ = themerr_for(series, kind)
-            if tr:
-                from src.sources.youtube import watch_url
-                result = ThemeResult(title=(tr["title"] or title) + " (ThemerrDB)", source="YouTube", url=watch_url(tr["video_id"]))
-        extra = {"year": year_of(series.name)} if kind != "anime" else {}
-        result = result or source.search(query, mtype, **extra)
-        if not result and number is None:             # rien sous le titre du dossier : on tente le titre original
-            alt, _ = original_title_for(series, title, kind)
-            if alt and alt.casefold() != query.casefold():
-                result = source.search(alt, mtype, **extra)
-        if not result:
-            return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
+        if kind != "anime":
+            # Films et séries : on n'accepte QUE un thème validé par la communauté (ThemerrDB). Aucun choix automatique
+            # sur YouTube (il valide n'importe quoi) : sinon on passe au suivant, la recherche se fait à la main.
+            if number is not None:
+                return False, "pas de thème validé par la communauté pour une saison : à chercher à la main"
+            tr, why = themerr_for(series, kind)
+            if not tr:
+                return False, f"pas de thème validé par la communauté (ThemerrDB : {why or 'inconnu'}) : à chercher à la main"
+            from src.sources.youtube import watch_url
+            result = ThemeResult(title=(tr["title"] or title) + " (ThemerrDB)", source="YouTube", url=watch_url(tr["video_id"]))
+        else:
+            result = source.search(query, mtype)
+            if not result and number is None:         # rien sous le titre du dossier : on tente le titre original
+                alt, _ = original_title_for(series, title, kind)
+                if alt and alt.casefold() != query.casefold():
+                    result = source.search(alt, mtype)
+            if not result:
+                return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
         ok, why = _download_replace(source, result.url, folder)
         if not ok:
             return False, why
