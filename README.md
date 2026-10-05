@@ -5,6 +5,26 @@
 
 Automatic theme song downloader and integrator for Emby/Plex/Jellyfin media servers.
 
+## 📸 Aperçu
+
+*Captures avec des données de démonstration.*
+
+**La liste des films, séries et animes, avec ceux qui n'ont pas encore de thème**
+
+![La liste des films, séries et animes, avec ceux qui n'ont pas encore de thème](docs/screenshots/liste.png)
+
+**Les propositions pour un titre : la sélection ★ de la base ThemerrDB en tête, puis les résultats YouTube**
+
+![Les propositions pour un titre : la sélection ★ de la base ThemerrDB en tête, puis les résultats YouTube](docs/screenshots/recherche.png)
+
+**La recherche annonce chaque étape en direct (titre original, ThemerrDB, YouTube…)**
+
+![La recherche annonce chaque étape en direct (titre original, ThemerrDB, YouTube…)](docs/screenshots/progression.png)
+
+**Sur téléphone**
+
+![Sur téléphone](docs/screenshots/mobile.png)
+
 ## Features
 
 - 🎵 **Sources des thèmes** : AnimeThemes (animes), ThemerrDB et YouTube (films et séries)
