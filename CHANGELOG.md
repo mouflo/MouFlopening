@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.15.0] - 2026-10-05
+
+### Ajouté
+- **Supprimer un thème existant**, avec double validation : le bouton « 🗑 Supprimer ce thème » (sous le lecteur du thème actuel) demande d'abord « Continuer », puis une « Dernière validation ». Le serveur refuse aussi toute suppression sans cette double validation. Le fichier n'est pas détruit : il est mis de côté dans le dossier des anciens thèmes, et Emby est prévenu
+
 ## [0.14.0] - 2026-10-05
 
 ### Corrigé

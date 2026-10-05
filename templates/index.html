@@ -342,11 +342,35 @@ function refreshSkip() {
     });
 }
 
+// Suppression d'un thème : deux validations successives (le fichier est mis de côté, pas détruit)
+function deleteStep(step) {
+    const row = $('delRow'); if (!row) return;
+    const name = esc(selected.title || selected.name) + ' · ' + esc(target.label);
+    if (step === 1) {
+        row.innerHTML = `<div class="note warn">Supprimer le thème de « ${name} » ?<br>
+            <button class="btn ghost small" id="delNo">Annuler</button> <button class="btn danger small" id="delGo">Continuer</button></div>`;
+        $('delGo').addEventListener('click', () => deleteStep(2));
+    } else if (step === 2) {
+        row.innerHTML = `<div class="note err"><b>Dernière validation</b> : le thème de « ${name} » sera retiré. Le fichier est gardé dans le dossier des anciens thèmes.<br>
+            <button class="btn ghost small" id="delNo">Annuler</button> <button class="btn danger small" id="delGo">Oui, supprimer ce thème</button></div>`;
+        $('delGo').addEventListener('click', async () => {
+            $('delGo').disabled = true;
+            const r = await post('/api/theme/delete', {id: target.id, confirm: 2});
+            if (r.error) { row.innerHTML = ''; return note($('msg'), r.error, 'err'); }
+            note($('msg'), r.message, r.message.includes('Emby actualise') ? 'ok' : 'warn');
+            await loadLibrary(true);
+        });
+    }
+    $('delNo').addEventListener('click', () => { row.innerHTML = '<button class="btn danger small" id="btnDel">🗑 Supprimer ce thème</button>'; $('btnDel').addEventListener('click', () => deleteStep(1)); });
+}
+
 function refreshCurrent() {
     if (!selected || !$('current')) return;
     $('hint').textContent = target.number === 0 ? 'Emby associe un thème à un dossier, pas à un fichier : ce thème sera lu pour tous les épisodes et films du dossier Spéciaux. Le mode automatique ne traite pas les Spéciaux : choisis-le ici.' : '';
     $('current').innerHTML = target.has_theme
-        ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio></div>` : '';
+        ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio>
+           <div id="delRow"><button class="btn danger small" id="btnDel">🗑 Supprimer ce thème</button></div></div>` : '';
+    if (target.has_theme) $('btnDel').addEventListener('click', () => deleteStep(1));
 }
 
 async function search(full) {

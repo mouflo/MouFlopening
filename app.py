@@ -560,6 +560,27 @@ def api_skip():
     return jsonify({"ok": True})
 
 
+@app.route("/api/theme/delete", methods=["POST"])
+def api_theme_delete():
+    """Supprime le thème d'un titre : double validation obligatoire. Le fichier n'est pas détruit, il est mis de côté dans le dossier des anciens thèmes."""
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != 2:
+        return jsonify({"error": "Double validation manquante : rien n'a été supprimé."}), 400
+    folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
+    if not folder:
+        return jsonify({"error": "Série ou saison introuvable"}), 404
+    if not find_theme(folder):
+        return jsonify({"error": "Ce titre n'a pas de thème"}), 404
+    with _work_lock:
+        _backup_existing(folder)
+    if find_theme(folder):
+        return jsonify({"error": "Le thème n'a pas pu être supprimé (droits d'écriture ? détails : bouton Journal)"}), 500
+    logger.info("Thème supprimé (mis de côté) : %s", folder)
+    kind = kind_of(data.get("id", ""))
+    emby = EMBY.refresh_series(series.name, library.clean_title(series.name), number, kind, series.parent.name)
+    return jsonify({"ok": True, "message": f"Thème supprimé (l'ancien fichier est conservé dans le dossier des anciens thèmes). {emby['message']}"})
+
+
 @app.route("/api/auto", methods=["POST"])
 def api_auto():
     data = request.get_json(silent=True) or {}
