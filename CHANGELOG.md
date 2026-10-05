@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.11.0] - 2026-10-05
+
+### Ajouté
+- Nouvelle source pour les films et les séries : **ThemerrDB** (https://github.com/LizardByte/ThemerrDB, licence BSD-3-Clause), une base communautaire qui associe chaque film ou série (identifiant TheMovieDB) à la bonne vidéo YouTube de son thème, validée par des humains. Le thème proposé apparaît en tête de la liste, marqué « ★ », avant les résultats de la recherche YouTube ; il est aussi essayé en premier par le téléchargement automatique
+- Nécessite la clé TheMovieDB (reprise de MouFloster ou saisie avec le bouton « Clé TMDB »). Sans clé ou si la base n'a rien pour un titre, la recherche YouTube habituelle continue seule
+
 ## [0.10.0] - 2026-10-05
 
 ### Amélioré

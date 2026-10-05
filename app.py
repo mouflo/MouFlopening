@@ -48,6 +48,7 @@ from src.fsutil import safe_move
 from src.library import THEME_DIR, THEME_EXTS, THEME_FILENAME, find_theme
 from src.sources.animethemes import AnimeThemesSource
 from src.sources.youtube import YouTubeSource
+from src.sources.base_source import ThemeResult
 
 BASE_VERSION = "0.2"
 
@@ -254,6 +255,18 @@ def original_title_for(series, title, kind):
     return "", f"{why} ; {why2}"
 
 
+def themerr_for(series, kind):
+    """Thème choisi par la base ThemerrDB (films et séries, via l'identifiant TheMovieDB). -> ({"title","video_id"} ou None, remarque)"""
+    if kind == "anime":
+        return None, ""
+    from src import title_lookup
+    from src.sources import themerrdb
+    tid, why = title_lookup.tmdb_id(series.name, library.clean_title(series.name), kind, os.getenv("TMDB_API_KEY", "").strip())
+    if not tid:
+        return None, why
+    return themerrdb.lookup(kind, tid)
+
+
 def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
     """Choisit automatiquement le meilleur générique, l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
     series = series or folder
@@ -261,8 +274,14 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
     source = source_for(kind)
     with _work_lock:
         mtype = "anime" if kind == "anime" else ("movie" if kind == "movie" else "tv")
+        result = None
+        if number is None:                            # ThemerrDB : thème validé par des humains, à essayer avant la recherche YouTube
+            tr, _ = themerr_for(series, kind)
+            if tr:
+                from src.sources.youtube import watch_url
+                result = ThemeResult(title=(tr["title"] or title) + " (ThemerrDB)", source="YouTube", url=watch_url(tr["video_id"]))
         extra = {"year": year_of(series.name)} if kind != "anime" else {}
-        result = source.search(query, mtype, **extra)
+        result = result or source.search(query, mtype, **extra)
         if not result and number is None:             # rien sous le titre du dossier : on tente le titre original
             alt, _ = original_title_for(series, title, kind)
             if alt and alt.casefold() != query.casefold():
@@ -412,6 +431,13 @@ def api_search():
         return YOUTUBE.candidates(t, "movie" if kind == "movie" else "series", year=year_of(series_name))
 
     results, seen = [], set()
+    if series and kind != "anime":
+        tr, _why = themerr_for(series, kind)
+        if tr:
+            from src.sources.youtube import watch_url
+            seen.add(tr["video_id"])
+            results.append({"name": "★ " + (tr["title"] or title), "year": "base ThemerrDB", "channel": "choix validé par la communauté",
+                            "score": 100, "themes": [{"slug": "▶", "type": "yt", "youtube": tr["video_id"], "url": watch_url(tr["video_id"])}]})
     for t in titles:
         try:
             found = run(t)
@@ -426,7 +452,7 @@ def api_search():
                 continue
             seen.add(key)
             results.append(r)
-    results.sort(key=lambda r: -int(r.get("score") or 0))
+    results.sort(key=lambda r: -int(r.get("score") or 0))     # la sélection ThemerrDB (score 100) reste en tête
     return jsonify({"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note})
 
 

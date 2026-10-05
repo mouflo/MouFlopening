@@ -7,7 +7,7 @@ Automatic theme song downloader and integrator for Emby/Plex/Jellyfin media serv
 
 ## Features
 
-- 🎵 **Multiple Theme Sources**: AnimeThemes, YouTube, Spotify, and Local files
+- 🎵 **Sources des thèmes** : AnimeThemes (animes), ThemerrDB et YouTube (films et séries)
 - 🎬 **Smart Matching**: Fuzzy string matching for accurate title identification
 - 📚 **Batch Processing**: Download themes for multiple titles at once
 - 🔄 **Emby Integration**: Automatic library refresh after downloads
