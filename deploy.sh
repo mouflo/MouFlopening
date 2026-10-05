@@ -25,6 +25,12 @@ log "Nouveau commit: $NEW_COMMIT"
 
 git reset --hard origin/main || git reset --hard origin/master
 
+# config.json encore au stade « copie du modèle » (adresse Emby d'exemple) : on le régénère avec les bonnes valeurs par défaut
+if [ -f config.json ] && grep -q "192.168.1.100" config.json; then
+    cp config.example.json config.json
+    log "⚙️  config.json mis à jour depuis le modèle"
+fi
+
 # Réinstaller les dépendances si requirements.txt a changé
 if git diff "$OLD_COMMIT" HEAD -- requirements.txt | grep -q .; then
     log "📦 requirements.txt modifié, installation des dépendances..."

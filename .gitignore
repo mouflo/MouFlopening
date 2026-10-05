@@ -41,3 +41,6 @@ downloads_history.json
 downloads/
 *.mp3
 .DS_Store
+
+# Données locales (secrets, thèmes, base)
+data/

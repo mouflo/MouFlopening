@@ -13,6 +13,8 @@ import click
 
 from src.sources.base_source import BaseSource, ThemeResult
 from src.sources.animethemes import AnimeThemesSource
+from src.library import THEME_FILENAME, missing_themes
+from src.emby_client import EmbyClient
 
 
 class MouFlopening:
@@ -35,7 +37,9 @@ class MouFlopening:
         try:
             with open(config_path, 'r') as f:
                 config = json.load(f)
+            config = self._with_defaults(config)
             logging.info(f"Configuration loaded from {config_path}")
+            self._apply_secrets(config)
             return config
         except FileNotFoundError:
             logging.error(f"Configuration file not found: {config_path}")
@@ -44,6 +48,33 @@ class MouFlopening:
         except json.JSONDecodeError as e:
             logging.error(f"Invalid JSON in configuration: {e}")
             sys.exit(1)
+
+    @staticmethod
+    def _with_defaults(config: Dict[str, Any]) -> Dict[str, Any]:
+        """Complète config.json avec les valeurs de config.example.json (clés absentes seulement)."""
+        example = Path(__file__).with_name("config.example.json")
+        if not example.exists():
+            return config
+
+        def merge(base: Dict[str, Any], over: Dict[str, Any]) -> Dict[str, Any]:
+            out = dict(base)
+            for key, value in over.items():
+                out[key] = merge(base[key], value) if isinstance(value, dict) and isinstance(base.get(key), dict) else value
+            return out
+
+        return merge(json.loads(example.read_text()), config)
+
+    @staticmethod
+    def _apply_secrets(config: Dict[str, Any]) -> None:
+        """Les secrets (clé Emby) viennent de data/secrets.env, jamais de GitHub."""
+        secrets = Path("data/secrets.env")
+        if not secrets.exists():
+            return
+        for line in secrets.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                key, value = line.split("=", 1)
+                if key.strip() == "EMBY_API_KEY":
+                    config.setdefault("emby", {})["api_key"] = value.strip().strip('"')
 
     def _setup_logging(self) -> None:
         """Configure logging based on configuration"""
@@ -57,7 +88,8 @@ class MouFlopening:
             handlers=[
                 logging.FileHandler(log_file),
                 logging.StreamHandler()
-            ]
+            ],
+            force=True  # sinon un log émis avant ce point bloque la configuration
         )
 
     def _initialize_sources(self) -> None:
@@ -67,7 +99,9 @@ class MouFlopening:
         # Initialize AnimeThemes source
         if sources_config.get('animethemes', {}).get('enabled', False):
             try:
-                animethemes = AnimeThemesSource(sources_config['animethemes'])
+                animethemes = AnimeThemesSource(
+                    sources_config['animethemes'],
+                    threshold=self.config.get('matching', {}).get('threshold', 70))
                 if animethemes.validate_config():
                     self.sources.append(animethemes)
                     logging.info("AnimeThemes source initialized")
@@ -82,31 +116,38 @@ class MouFlopening:
         self.sources.sort()
         logging.info(f"Initialized {len(self.sources)} theme sources")
 
-    def download_theme(self, title: str, media_type: str = 'auto') -> Optional[str]:
+    def download_theme(self, title: str, media_type: str = 'auto',
+                       output_dir: Optional[Path] = None) -> Optional[str]:
         """
-        Download a theme song for given title
+        Cherche et télécharge un thème, l'enregistre sous theme.mp3 dans output_dir.
 
         Args:
-            title: Title of movie/series
-            media_type: Type of media (tv, movie, anime, auto)
+            title: Titre du film/série
+            media_type: Type de média (tv, movie, anime, auto)
+            output_dir: Dossier de la série (par défaut themes.output_dir/<titre>)
 
         Returns:
-            Path to downloaded file if successful, None otherwise
+            Chemin du fichier si succès, None sinon
         """
-        logging.info(f"Searching for theme: {title} ({media_type})")
+        logging.info(f"Recherche du thème : {title} ({media_type})")
+        if output_dir is None:
+            base = Path(self.config.get('themes', {}).get('output_dir', 'themes'))
+            output_dir = base / title
+        target = Path(output_dir) / THEME_FILENAME
 
         for source in self.sources:
             try:
                 result = source.search(title, media_type)
-                if result:
-                    logging.info(f"Found: {result.title} from {result.source}")
-                    # TODO: Download and process the theme
-                    return None
+                if not result:
+                    continue
+                logging.info(f"Trouvé : {result.title} ({result.source})")
+                if source.download(result.url, target):
+                    return str(target)
             except Exception as e:
-                logging.error(f"Error searching {source.name}: {e}")
+                logging.error(f"Erreur avec {source.name} : {e}")
                 continue
 
-        logging.warning(f"No theme found for: {title}")
+        logging.warning(f"Aucun thème trouvé pour : {title}")
         return None
 
     def batch_download(self, titles_file: str) -> None:
@@ -129,11 +170,31 @@ class MouFlopening:
         except FileNotFoundError:
             logging.error(f"Titles file not found: {titles_file}")
 
-    def scan_missing(self) -> None:
-        """Scan library for media without themes"""
-        logging.info("Scanning for missing themes...")
-        # TODO: Implement library scanning
-        pass
+    def scan_missing(self, dry_run: bool = False, limit: Optional[int] = None) -> None:
+        """Parcourt la médiathèque et télécharge le thème des séries qui n'en ont pas."""
+        roots = self.config.get('library', {}).get('paths', [])
+        if not roots:
+            logging.error("Aucun dossier dans library.paths (config.json)")
+            return
+
+        todo = missing_themes(roots)
+        logging.info(f"{len(todo)} série(s) sans {THEME_FILENAME}")
+        emby = EmbyClient(self.config.get('emby', {}))
+        refresh = self.config.get('emby', {}).get('scan_after_download', True)
+        done = failed = 0
+
+        for title, folder in todo[:limit]:
+            if dry_run:
+                logging.info(f"[simulation] {title}  ->  {folder}")
+                continue
+            if self.download_theme(title, 'anime', folder):
+                done += 1
+                if refresh:
+                    emby.refresh_path(folder)
+            else:
+                failed += 1
+
+        logging.info(f"Terminé : {done} thème(s) ajouté(s), {failed} introuvable(s)")
 
     def trigger_emby_scan(self) -> None:
         """Trigger Emby library refresh"""
@@ -196,7 +257,10 @@ class MouFlopening:
 @click.option('--download', type=str, help='Download single theme by title')
 @click.option('--batch', type=str, help='Batch download from file')
 @click.option('--scan-missing', is_flag=True, help='Scan library for missing themes')
-def main(config: str, interactive: bool, download: str, batch: str, scan_missing: bool) -> None:
+@click.option('--dry-run', is_flag=True, help='Avec --scan-missing : liste sans rien télécharger')
+@click.option('--limit', type=int, default=None, help='Avec --scan-missing : nombre maximum de séries')
+def main(config: str, interactive: bool, download: str, batch: str, scan_missing: bool,
+         dry_run: bool, limit: int) -> None:
     """MouFlopening - Theme song downloader and Emby integrator"""
 
     app = MouFlopening(config)
@@ -206,7 +270,7 @@ def main(config: str, interactive: bool, download: str, batch: str, scan_missing
     elif batch:
         app.batch_download(batch)
     elif scan_missing:
-        app.scan_missing()
+        app.scan_missing(dry_run=dry_run, limit=limit)
     elif interactive or not any([download, batch, scan_missing]):
         app.show_interactive_menu()
 

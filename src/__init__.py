@@ -1,6 +1,3 @@
-"""
-MouFlopening - Theme song downloader and Emby integrator
-"""
+"""MouFlopening"""
 
-__version__ = "0.1.0"
-__author__ = "MouFlopening Contributors"
+__version__ = "0.2.0"

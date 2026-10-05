@@ -1,34 +1,30 @@
 {
   "emby": {
-    "host": "http://192.168.1.100:8096",
-    "api_key": "cle api emby",
+    "host": "http://192.168.1.134:8096",
+    "api_key": "your_emby_api_key_here",
     "scan_after_download": true,
     "timeout": 30
   },
   "themes": {
-    "output_dir": "/mnt/media/Themes",
-    "organization": "by_media_type",
-    "naming_pattern": "{title}.theme.mp3"
+    "output_dir": "/opt/mouflopening/data/themes"
   },
   "sources": {
     "animethemes": {
       "enabled": true,
       "priority": 1,
-      "api_url": "https://api.animethemes.moe"
+      "api_url": "https://api.animethemes.moe",
+      "theme_types": [
+        "OP",
+        "ED"
+      ]
     },
     "youtube": {
       "enabled": false,
       "priority": 2,
       "timeout": 60
     },
-    "spotify": {
-      "enabled": false,
-      "priority": 3,
-      "client_id": "your_spotify_client_id",
-      "client_secret": "your_spotify_client_secret"
-    },
     "local": {
-      "enabled": true,
+      "enabled": false,
       "priority": 4,
       "search_paths": [
         "/mnt/media/Themes",
@@ -66,5 +62,10 @@
     "enabled": true,
     "interval_hours": 24,
     "scan_missing_interval_hours": 12
+  },
+  "library": {
+    "paths": [
+      "/mnt/mouflosyno/Emby-Media/Manga"
+    ]
   }
 }
