@@ -3,38 +3,38 @@
 (function () {
   'use strict';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); };
-  var CSS = '.aed-bg{position:fixed;inset:0;background:#080b1f;z-index:200;display:flex;align-items:stretch;justify-content:center}' +
-    '.aed{background:#0a0f2c;color:#eaf0ff;width:min(900px,100%);height:100dvh;max-height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}' +
+  var CSS = '.aed-bg{position:fixed;inset:0;background:var(--bg,#101010);z-index:200;display:flex;align-items:stretch;justify-content:center}' +
+    '.aed{background:var(--bg,#101010);color:var(--text,#fff);width:min(900px,100%);height:100dvh;max-height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}' +
     '.aed>*{flex:none}' +
-    '.aed button{background:#16204f;color:#eaf0ff;border:0;border-radius:12px;font:inherit;cursor:pointer;padding:0;box-shadow:none;min-height:0}' +
+    '.aed button{background:var(--field,#2a2a2a);color:var(--text,#fff);border:0;border-radius:12px;font:inherit;cursor:pointer;padding:0;box-shadow:none;min-height:0}' +
     '.aed .aed-top{display:flex;align-items:center;gap:10px;padding:10px 12px}' +
     '.aed .aed-top .t{flex:1;min-width:0;font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-    '.aed .aed-top .t small{display:block;font-weight:400;font-size:.72rem;color:#8a94c4;overflow:hidden;text-overflow:ellipsis}' +
-    '.aed .aed-ic{background:none;border:0;color:#eaf0ff;font-size:1.5rem;cursor:pointer;padding:6px 10px;line-height:1}' +
-    '.aed .aed-save{background:linear-gradient(135deg,#7a4dff,#2d9cff);color:#fff;border:0;border-radius:6px;padding:10px 16px;font:inherit;font-weight:800;letter-spacing:.03em;cursor:pointer}' +
+    '.aed .aed-top .t small{display:block;font-weight:400;font-size:.72rem;color:var(--muted,#a0a0a0);overflow:hidden;text-overflow:ellipsis}' +
+    '.aed .aed-ic{background:none;border:0;color:var(--text,#fff);font-size:1.5rem;cursor:pointer;padding:6px 10px;line-height:1}' +
+    '.aed .aed-save{background:var(--accent,#52b54b);color:#fff;border:0;border-radius:6px;padding:10px 16px;font:inherit;font-weight:800;letter-spacing:.03em;cursor:pointer}' +
     '.aed .aed-save:disabled{opacity:.5}' +
-    '.aed .aed-hint{color:#8a94c4;font-size:.78rem;padding:0 14px 6px;text-align:center}' +
-    '.aed .aed-wave{position:relative;flex:1 1 auto!important;min-height:200px;background:#1a2150;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}' +
+    '.aed .aed-hint{color:var(--muted,#a0a0a0);font-size:.78rem;padding:0 14px 6px;text-align:center}' +
+    '.aed .aed-wave{position:relative;flex:1 1 auto!important;min-height:200px;background:var(--card,#1c1c1c);touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden}' +
     '.aed .aed-wave canvas{position:absolute;inset:0;width:100%;height:100%;display:block}' +
-    '.aed .aed-pan{width:calc(100% - 28px);margin:6px 14px 0;accent-color:#2d9cff}' +
+    '.aed .aed-pan{width:calc(100% - 28px);margin:6px 14px 0;accent-color:var(--accent,#52b54b)}' +
     '.aed .aed-steps{display:flex;justify-content:space-between;gap:8px;padding:10px 12px 0}' +
-    '.aed .aed-pill{display:flex;align-items:center;background:#16204f;border-radius:12px;overflow:hidden}' +
-    '.aed .aed-pill button{background:none;border:0;color:#eaf0ff;font-size:1.5rem;width:46px;height:46px;cursor:pointer;line-height:1}' +
-    '.aed .aed-pill button:active{background:#24306e}' +
+    '.aed .aed-pill{display:flex;align-items:center;background:var(--field,#2a2a2a);border-radius:12px;overflow:hidden}' +
+    '.aed .aed-pill button{background:none;border:0;color:var(--text,#fff);font-size:1.5rem;width:46px;height:46px;cursor:pointer;line-height:1}' +
+    '.aed .aed-pill button:active{background:var(--line,#3a3a3a)}' +
     '.aed .aed-pill .v{min-width:74px;text-align:center;font-variant-numeric:tabular-nums;font-size:.95rem}' +
-    '.aed .aed-pill .v small{display:block;font-size:.65rem;color:#8a94c4}' +
+    '.aed .aed-pill .v small{display:block;font-size:.65rem;color:var(--muted,#a0a0a0)}' +
     '.aed .aed-zoom{display:flex;gap:8px;padding:8px 12px 0;align-items:center}' +
-    '.aed .aed-chip{background:#16204f;color:#eaf0ff;border:0;border-radius:18px;padding:10px 16px;font:inherit;font-size:.9rem;cursor:pointer}' +
+    '.aed .aed-chip{background:var(--field,#2a2a2a);color:var(--text,#fff);border:0;border-radius:18px;padding:10px 16px;font:inherit;font-size:.9rem;cursor:pointer}' +
     '.aed .aed-zoom .aed-pill button{width:48px;height:44px;font-size:1.2rem;padding:0;overflow:visible}' +
-    '.aed .aed-chip:active{background:#24306e}' +
-    '.aed .aed-dur{margin-left:auto;color:#8a94c4;font-size:.85rem}.aed-dur b{color:#eaf0ff}' +
+    '.aed .aed-chip:active{background:var(--line,#3a3a3a)}' +
+    '.aed .aed-dur{margin-left:auto;color:var(--muted,#a0a0a0);font-size:.85rem}.aed-dur b{color:var(--text,#fff)}' +
     '.aed .aed-transport{display:flex;justify-content:center;align-items:center;gap:34px;padding:10px 0 4px}' +
-    '.aed .aed-round{width:56px;height:56px;border-radius:50%;border:0;background:#16204f;color:#eaf0ff;font-size:1.4rem;cursor:pointer}' +
-    '.aed .aed-round.big{width:72px;height:72px;background:#1e9bff;font-size:1.9rem}' +
-    '.aed .aed-fades{display:flex;gap:10px;justify-content:space-between;padding:8px 12px 12px;background:#16204f;border-radius:16px 16px 0 0;margin-top:6px}' +
-    '.aed .aed-fade{flex:1;text-align:center}.aed-fade .l{font-size:.78rem;color:#b7c0ea;margin-bottom:4px}' +
-    '.aed .aed-fade .aed-pill{background:#0a0f2c;justify-content:center}' +
-    '.aed .aed-fade input{width:44px;background:none;border:0;color:#eaf0ff;text-align:center;font:inherit;font-size:1rem;padding:0}' +
+    '.aed .aed-round{width:56px;height:56px;border-radius:50%;border:0;background:var(--field,#2a2a2a);color:var(--text,#fff);font-size:1.4rem;cursor:pointer}' +
+    '.aed .aed-round.big{width:72px;height:72px;background:var(--accent,#52b54b);font-size:1.9rem}' +
+    '.aed .aed-fades{display:flex;gap:10px;justify-content:space-between;padding:8px 12px 12px;background:var(--field,#2a2a2a);border-radius:16px 16px 0 0;margin-top:6px}' +
+    '.aed .aed-fade{flex:1;text-align:center}.aed-fade .l{font-size:.78rem;color:var(--text2,#d0d0d0);margin-bottom:4px}' +
+    '.aed .aed-fade .aed-pill{background:var(--bg,#101010);justify-content:center}' +
+    '.aed .aed-fade input{width:44px;background:none;border:0;color:var(--text,#fff);text-align:center;font:inherit;font-size:1rem;padding:0}' +
     '.aed .aed-msg{margin:6px 12px 0;padding:9px 12px;border-radius:8px;font-size:.88rem}.aed-msg.ok{background:rgba(82,181,75,.18);border:1px solid #52b54b}.aed-msg.err{background:rgba(229,83,75,.18);border:1px solid #e5534b}' +
     '@media(min-width:900px){.aed{height:min(100dvh,760px);margin:auto;border-radius:12px}}';
 
@@ -94,7 +94,7 @@
       var top = 22, bot = 40, mid = top + (H - top - bot) / 2, amp = (H - top - bot) / 2 - 4, p = S.peaks, bps = S.bps;
       var xs = xOf(S.start), xe = xOf(S.end);
       // zone gardée plus claire
-      ctx.fillStyle = 'rgba(120,150,255,.14)'; ctx.fillRect(Math.max(0, xs), top, Math.min(W, xe) - Math.max(0, xs), H - top - bot);
+      ctx.fillStyle = 'rgba(82,181,75,.16)'; ctx.fillRect(Math.max(0, xs), top, Math.min(W, xe) - Math.max(0, xs), H - top - bot);
       // barres du son
       var barW = 3, gain = 127 / Math.max(S.peak || 127, 20);
       for (var x = 0; x < W; x += barW) {
@@ -104,26 +104,26 @@
         for (var b = b0; b <= b1 && b * 2 < p.length; b++) { var a1 = Math.max(Math.abs(p[b * 2]), Math.abs(p[b * 2 + 1])); if (a1 > mx) mx = a1; }
         var h = Math.max(2, Math.min(1, (mx / 127) * gain) * amp);
         var inside = (x + 1) >= xs && (x + 1) <= xe;
-        ctx.fillStyle = inside ? '#35a7ff' : '#4a5688';
+        ctx.fillStyle = inside ? '#52b54b' : '#4a4a4a';
         ctx.fillRect(x, mid - h, 2, h * 2);
       }
       // règle des temps (en haut)
-      ctx.fillStyle = 'rgba(200,210,255,.55)'; ctx.font = '11px sans-serif';
+      ctx.fillStyle = 'rgba(208,208,208,.55)'; ctx.font = '11px sans-serif';
       var step = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300].find(function (s) { return s * S.pps >= 70; }) || 600;
       for (var tt = Math.ceil(S.view / step) * step; tt < S.view + span(); tt += step) { var xx = xOf(tt); ctx.fillRect(xx, 14, 1, 8); ctx.fillText(fmt(tt).replace(/\.00$/, ''), xx + 3, 11); }
       // parties coupées assombries
-      ctx.fillStyle = 'rgba(8,11,31,.62)';
+      ctx.fillStyle = 'rgba(16,16,16,.66)';
       if (xs > 0) ctx.fillRect(0, top, Math.min(W, xs), H - top - bot);
       if (xe < W) ctx.fillRect(Math.max(0, xe), top, W - Math.max(0, xe), H - top - bot);
       // fondus (enveloppe)
       var fi = parseFloat($('aedFi').value) || 0, fo = parseFloat($('aedFo').value) || 0;
-      ctx.strokeStyle = 'rgba(255,214,102,.95)'; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(229,168,75,.95)'; ctx.lineWidth = 2;
       if (fi > 0) { ctx.beginPath(); ctx.moveTo(xs, H - bot); ctx.lineTo(xOf(S.start + fi), top + 6); ctx.stroke(); }
       if (fo > 0) { ctx.beginPath(); ctx.moveTo(xOf(S.end - fo), top + 6); ctx.lineTo(xe, H - bot); ctx.stroke(); }
       // poignées : trait + languette en bas
-      handle(xs, '#2d9cff', -1); handle(xe, '#2d9cff', 1);
+      handle(xs, '#52b54b', -1); handle(xe, '#52b54b', 1);
       // lecture
-      var xh = xOf(S.head); if (xh >= 0 && xh <= W) { ctx.fillStyle = '#ff9d2e'; ctx.fillRect(xh - 1, top, 2, H - top - bot); ctx.beginPath(); ctx.arc(xh, top, 5, 0, 6.3); ctx.fill(); }
+      var xh = xOf(S.head); if (xh >= 0 && xh <= W) { ctx.fillStyle = '#e5a84b'; ctx.fillRect(xh - 1, top, 2, H - top - bot); ctx.beginPath(); ctx.arc(xh, top, 5, 0, 6.3); ctx.fill(); }
       $('aedS').textContent = fmt(S.start); $('aedE').textContent = fmt(S.end); $('aedD').textContent = fmt(S.end - S.start);
       var pan = $('aedPan'), room = S.dur - span(); pan.disabled = room <= 0.01; pan.value = room > 0 ? Math.round(1000 * S.view / room) : 0;
     }

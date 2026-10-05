@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.23.3] - 2026-10-05
+
+### Amélioré
+- Éditeur audio : couleurs aux couleurs des apps MouFl (fond gris foncé, vert pour la courbe, les poignées et le bouton ENREGISTRER)
+
 ## [0.23.2] - 2026-10-05
 
 ### Corrigé
