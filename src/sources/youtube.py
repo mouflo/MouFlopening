@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from ..fsutil import safe_move
 from ..progress import say
+from .. import ytcookies
 from .base_source import BaseSource, ThemeResult
 from ..audio import REFERENCE_DB, convert_to_mp3
 from ..matching import similarity
@@ -159,7 +160,7 @@ class YouTubeSource(BaseSource):
             import yt_dlp
             opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
                     "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
-                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {max_duration or self.max_duration}")}
+                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {max_duration or self.max_duration}"), **ytcookies.opts()}
             def hook(d):
                 if d.get("status") == "downloading":
                     tot = d.get("total_bytes") or d.get("total_bytes_estimate")
@@ -182,7 +183,7 @@ class YouTubeSource(BaseSource):
         """Durée de la vidéo en secondes (0 si inconnue) : sert à expliquer un refus « trop longue »."""
         try:
             import yt_dlp
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout}) as ydl:
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout, **ytcookies.opts()}) as ydl:
                 return int((ydl.extract_info(url, download=False) or {}).get("duration") or 0)
         except Exception:
             return 0

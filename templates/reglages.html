@@ -24,6 +24,20 @@
     .field input[type=text], .field input[type=password], .field select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:10px; outline:none; width:100%; box-sizing:border-box; }
     .field input:focus { border-color:var(--accent); }
     .row { display:flex; gap:8px; flex-wrap:wrap; }
+    .row.nowrap { flex-wrap:nowrap; } .row.nowrap input { flex:1; min-width:0; }
+    .frow { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+    .frow input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); flex:none; }
+    .frow .fn { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+    .frow .fn small { display:block; color:var(--muted); }
+    .frow select { background:var(--field); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:8px; }
+    .frow.off .fn { opacity:.55; }
+    .modalbg { position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; z-index:50; padding:12px; }
+    .modalbg.show { display:flex; }
+    .modalbox { background:var(--card); border-radius:10px; padding:16px; width:min(560px,100%); max-height:85vh; display:flex; flex-direction:column; gap:10px; }
+    .modalbox .cur { font-family:monospace; font-size:.85rem; overflow-wrap:anywhere; background:var(--field); border-radius:4px; padding:8px; }
+    .dirs { overflow-y:auto; border:1px solid var(--line); border-radius:6px; min-height:180px; }
+    .dirs div { padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--line); }
+    .dirs div:hover { background:var(--field); }
     .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0 0; }
     .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
     .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
@@ -65,18 +79,39 @@
 
     <div class="panel">
         <h2>📁 Dossiers</h2>
-        <div class="sub">Le dossier qui contient tes médiathèques (un sous-dossier par type : Animes, Séries, Films…), et l'endroit où sont rangés les anciens thèmes remplacés. L'appli redémarre après l'enregistrement (quelques secondes).</div>
-        <div class="field"><label for="pathParent">Dossier des médiathèques</label><input type="text" id="pathParent" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/Emby-Media"></div>
-        <div class="field"><label for="pathBackup">Dossier des anciens thèmes</label><input type="text" id="pathBackup" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/MouFlopening/Anciens thèmes"></div>
+        <div class="sub">Le dossier qui contient tes médiathèques : chaque sous-dossier est proposé ci-dessous. Coche ceux à utiliser et indique ce qu'ils contiennent. Tu peux aussi ajouter des dossiers situés ailleurs. L'appli redémarre après l'enregistrement (quelques secondes).</div>
+        <div class="field"><label for="pathParent">Dossier des médiathèques</label>
+            <div class="row nowrap"><input type="text" id="pathParent" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/Emby-Media"><button class="btn ghost" data-browse="pathParent">📂 Parcourir</button><button class="btn ghost" id="pathRescan" title="Relire les sous-dossiers">↻</button></div></div>
+        <div id="folderList"></div>
+        <div class="row" style="margin-bottom:12px"><button class="btn ghost" id="folderAdd">➕ Ajouter un dossier</button></div>
+        <div class="field"><label for="pathBackup">Dossier des anciens thèmes (thèmes remplacés, jamais supprimés)</label>
+            <div class="row nowrap"><input type="text" id="pathBackup" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/MouFlopening/Anciens thèmes"><button class="btn ghost" data-browse="pathBackup">📂 Parcourir</button></div></div>
         <div class="tabsinfo" id="tabsInfo"></div>
         <div class="row" style="margin-top:12px"><button class="btn" id="pathsSave">Enregistrer et redémarrer</button></div>
         <div id="pathsMsg"></div>
     </div>
 
     <div class="panel">
+        <h2>🍪 Cookies YouTube <small style="color:var(--muted);font-weight:400">(facultatif)</small></h2>
+        <div class="sub">Aide l'appli quand YouTube refuse un téléchargement (« connexion demandée », « vidéo non disponible depuis le serveur »). Ne contourne pas les blocages pour droits d'auteur. Utilise de préférence un compte YouTube secondaire, pas ton compte principal : YouTube peut restreindre un compte utilisé par un robot.</div>
+        <details style="margin-bottom:10px"><summary style="cursor:pointer">Comment obtenir le fichier ?</summary>
+            <ol class="sub" style="margin:8px 0 0 18px;padding:0">
+                <li>Dans ton navigateur (Chrome ou Firefox), connecte-toi à youtube.com avec le compte voulu.</li>
+                <li>Installe une extension d'export de cookies, par exemple « Get cookies.txt LOCALLY ».</li>
+                <li>Sur la page youtube.com, clique sur l'extension et exporte au format <b>Netscape</b> (fichier cookies.txt).</li>
+                <li>Ouvre le fichier avec un éditeur de texte, copie tout et colle-le ci-dessous.</li>
+            </ol></details>
+        <div class="state" id="ckState"></div>
+        <div class="field"><label for="ckText">Contenu du fichier cookies.txt</label><textarea id="ckText" rows="4" autocomplete="off" spellcheck="false" placeholder="# Netscape HTTP Cookie File ..." style="background:var(--field);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:10px;font-family:monospace;font-size:.8rem;width:100%;box-sizing:border-box"></textarea></div>
+        <div class="row"><button class="btn ghost" id="ckTest">Vérifier</button><button class="btn" id="ckSave">Enregistrer</button><button class="btn ghost" id="ckClear">Supprimer les cookies</button></div>
+        <div id="ckMsg"></div>
+    </div>
+
+    <div class="panel">
         <h2>🌙 Lot de nuit &amp; Telegram</h2>
         <div class="sub">Chaque nuit, l'appli cherche les thèmes manquants de tous les onglets (mêmes règles que le lot manuel), puis t'envoie un compte rendu sur Telegram s'il y a du nouveau.</div>
         <label class="check"><input type="checkbox" id="nightOn"> Activer le lot de nuit</label>
+        <label class="check"><input type="checkbox" id="nightSeasons"> Remplir aussi les saisons des animes (jamais le même thème que la série)</label>
         <div class="field" style="max-width:160px"><label for="nightHour">Heure de lancement</label><select id="nightHour"></select></div>
         <div class="state" id="tgState"></div>
         <div class="field"><label for="tgToken">Jeton du bot Telegram (donné par @BotFather)</label><input type="password" id="tgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:ABC… (laisse vide pour garder l'actuel)"></div>
@@ -86,6 +121,13 @@
         <div id="nightMsg"></div>
     </div>
 </div>
+<div class="modalbg" id="browseBg"><div class="modalbox">
+    <h2 style="margin:0">📂 Choisir un dossier</h2>
+    <div class="cur" id="browseCur">/</div>
+    <div class="dirs" id="browseDirs"></div>
+    <div id="browseNote" class="state"></div>
+    <div class="row"><button class="btn ghost" id="browseUp">⬆ Remonter</button><button class="btn" id="browsePick">✅ Choisir ce dossier</button><button class="btn ghost" id="browseCancel">Annuler</button></div>
+</div></div>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -111,33 +153,80 @@ function keyForm(prefix, endpoint) {
 }
 
 // ----- Emby : adresse, dossiers -----
+let folders = [];
+const KIND_OPTS = [['', '— type ? —'], ['movie', '🎬 Films'], ['series', '📺 Séries'], ['anime', '🎌 Animes']];
+function renderFolders() {
+    $('folderList').innerHTML = folders.map((f, i) => `<div class="frow${f.enabled ? '' : ' off'}">
+        <input type="checkbox" data-i="${i}" class="fon" ${f.enabled ? 'checked' : ''} aria-label="Utiliser ce dossier">
+        <div class="fn">${esc(f.label || f.name)}<small>${esc(f.path)}${f.auto ? '' : ' · ajouté à la main'}</small></div>
+        <select data-i="${i}" class="fkind">${KIND_OPTS.map(([v, l]) => `<option value="${v}"${f.kind === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        ${f.auto ? '' : `<button class="btn ghost" data-del="${i}" title="Retirer">✕</button>`}</div>`).join('') || '<div class="state">Aucun sous-dossier trouvé : choisis le dossier des médiathèques ci-dessus, ou ajoute un dossier.</div>';
+}
+$('folderList').addEventListener('change', e => {
+    const i = Number(e.target.dataset.i); if (isNaN(i)) return;
+    if (e.target.classList.contains('fon')) folders[i].enabled = e.target.checked;
+    if (e.target.classList.contains('fkind')) { folders[i].kind = e.target.value; if (folders[i].kind) folders[i].enabled = true; }
+    renderFolders();
+});
+$('folderList').addEventListener('click', e => { const d = e.target.dataset.del; if (d !== undefined) { folders.splice(Number(d), 1); renderFolders(); } });
 async function loadPaths() {
     const p = await api('/api/settings/paths');
     $('embyHost').value = p.emby_host || ''; $('pathParent').value = p.auto_parent || ''; $('pathBackup').value = p.backup_dir || '';
+    folders = p.folders; renderFolders();
     const ic = {movie: '🎬', series: '📺', anime: '🎌'};
-    $('tabsInfo').innerHTML = (p.tabs.length ? '<b>Onglets trouvés :</b><br>' + p.tabs.map(t => `${ic[t.kind] || '📁'} ${esc(t.name)} — ${t.paths.map(esc).join(', ')}${t.ok ? '' : ' ⚠️ introuvable'}`).join('<br>') : '<b>Aucun onglet trouvé</b> : vérifie le dossier ci-dessus.')
-        + (p.ignored.length ? `<br><br>Ignorés (type non reconnu) : ${p.ignored.map(esc).join(', ')}` : '');
+    $('tabsInfo').innerHTML = (p.tabs.length ? '<b>Onglets actuels :</b><br>' + p.tabs.map(t => `${ic[t.kind] || '📁'} ${esc(t.name)} — ${t.paths.map(esc).join(', ')}${t.ok ? '' : ' ⚠️ introuvable'}`).join('<br>') : '<b>Aucun onglet pour le moment.</b>');
 }
+$('pathRescan').addEventListener('click', async () => {      // relit les sous-dossiers du dossier saisi (sans enregistrer)
+    const r = await api('/api/fs/list?path=' + encodeURIComponent($('pathParent').value));
+    if (r.error || r.path !== $('pathParent').value.replace(/\/+$/, '')) return say('pathsMsg', 'Dossier introuvable sur le serveur.', false);
+    const known = new Map(folders.map(f => [f.path, f]));
+    const auto = r.dirs.map(n => { const path = r.path.replace(/\/$/, '') + '/' + n, old = known.get(path); return old || {path, name: n, kind: '', guess: '', enabled: false, auto: true}; });
+    folders = auto.concat(folders.filter(f => !f.auto)); renderFolders(); say('pathsMsg', 'Sous-dossiers relus : coche ceux à utiliser et choisis leur type (les types évidents sont à faire quand même si le nom ne le dit pas).', 'warn');
+});
 $('embyHostSave').addEventListener('click', async () => { const r = await post('/api/settings/emby-host', {host: $('embyHost').value}); say('embyHostMsg', r.message || r.error, r.ok); });
 $('pathsSave').addEventListener('click', async () => {
     if (!confirm('Enregistrer ces dossiers ? L\'appli va redémarrer (quelques secondes) ; un lot en cours serait interrompu.')) return;
-    const r = await post('/api/settings/paths', {auto_parent: $('pathParent').value, backup_dir: $('pathBackup').value});
+    const r = await post('/api/settings/paths', {auto_parent: $('pathParent').value, backup_dir: $('pathBackup').value, folders});
     if (!r.ok) return say('pathsMsg', r.error, false);
     say('pathsMsg', r.message, 'warn');
-    for (let i = 0; i < 40; i++) { await new Promise(res => setTimeout(res, 2000)); try { const x = await fetch('/api/settings/paths'); if (x.ok) { await loadPaths(); return say('pathsMsg', 'Dossiers relus : voir les onglets trouvés ci-dessus.', true); } } catch (e) {} }
+    for (let i = 0; i < 40; i++) { await new Promise(res => setTimeout(res, 2000)); try { const x = await fetch('/api/settings/paths'); if (x.ok) { await loadPaths(); return say('pathsMsg', 'Dossiers relus : voir les onglets actuels ci-dessus.', true); } } catch (e) {} }
     say('pathsMsg', 'L\'appli met longtemps à revenir : recharge la page dans un instant.', 'warn');
+});
+
+// ----- explorateur de dossiers -----
+let browseTarget = null, browsePath = '/';
+async function browse(path) {
+    const r = await api('/api/fs/list?path=' + encodeURIComponent(path));
+    if (r.error) { $('browseNote').textContent = r.error; return; }
+    browsePath = r.path; $('browseCur').textContent = r.path; $('browseNote').textContent = r.note || (r.dirs.length ? '' : 'Aucun sous-dossier ici.');
+    $('browseDirs').innerHTML = r.dirs.map(n => `<div data-n="${esc(n)}">📁 ${esc(n)}</div>`).join('');
+    $('browseUp').disabled = !r.parent; $('browseUp').dataset.parent = r.parent || '';
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-browse]'); if (b) { browseTarget = b.dataset.browse; $('browseBg').classList.add('show'); browse($(browseTarget) ? $(browseTarget).value || '/mnt' : '/mnt'); } });
+$('folderAdd').addEventListener('click', () => { browseTarget = '#new'; $('browseBg').classList.add('show'); browse('/mnt'); });
+$('browseDirs').addEventListener('click', e => { const d = e.target.closest('[data-n]'); if (d) browse(browsePath.replace(/\/$/, '') + '/' + d.dataset.n); });
+$('browseUp').addEventListener('click', () => browse($('browseUp').dataset.parent || '/'));
+$('browseCancel').addEventListener('click', () => $('browseBg').classList.remove('show'));
+$('browsePick').addEventListener('click', () => {
+    $('browseBg').classList.remove('show');
+    if (browseTarget === '#new') {
+        if (folders.some(f => f.path === browsePath)) return say('pathsMsg', 'Ce dossier est déjà dans la liste.', 'warn');
+        const name = browsePath.split('/').filter(Boolean).pop() || browsePath;
+        folders.push({path: browsePath, name, kind: '', guess: '', enabled: false, auto: false}); renderFolders();
+        say('pathsMsg', 'Dossier ajouté : choisis ce qu\'il contient (film, série ou anime) pour l\'activer.', 'warn');
+    } else $(browseTarget).value = browsePath;
 });
 
 // ----- lot de nuit + Telegram -----
 $('nightHour').innerHTML = Array.from({length: 24}, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');
 async function loadNight() {
     const s = await api('/api/nightly');
-    $('nightOn').checked = s.enabled; $('nightHour').value = s.hour;
+    $('nightOn').checked = s.enabled; $('nightSeasons').checked = s.seasons; $('nightHour').value = s.hour;
     $('tgState').textContent = s.telegram ? `Telegram : réglé (discussion ${s.chat_hint}${s.telegram_origin === 'MouFlanimeXer' ? ', repris de MouFlanimeXer' : ''})` : 'Telegram : pas encore réglé';
     $('nightState').textContent = s.last_summary ? 'Dernier lot de nuit : ' + s.last_summary : '';
 }
 $('nightSave').addEventListener('click', async () => {
-    const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, hour: Number($('nightHour').value)});
+    const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, seasons: $('nightSeasons').checked, hour: Number($('nightHour').value)});
     if (r1.error) return say('nightMsg', r1.error, false);
     if ($('tgToken').value.trim() || $('tgChat').value.trim()) {
         say('nightMsg', 'Vérification de Telegram…', true);
@@ -153,6 +242,13 @@ $('nightRun').addEventListener('click', async () => {
     const r = await post('/api/nightly/run'); say('nightMsg', r.error || 'Lot lancé : suis-le sur la page d\'accueil, dans « Dernier traitement ».', !r.error);
 });
 
+
+// ----- cookies YouTube -----
+async function loadCk() { const s = await api('/api/settings/youtube-cookies'); $('ckState').textContent = s.configured ? `Cookies enregistrés le ${s.since}` : 'Aucun cookie enregistré'; }
+$('ckTest').addEventListener('click', async () => { const r = await post('/api/settings/youtube-cookies', {text: $('ckText').value, test: true}); say('ckMsg', r.message || r.error, r.ok); });
+$('ckSave').addEventListener('click', async () => { const r = await post('/api/settings/youtube-cookies', {text: $('ckText').value}); say('ckMsg', r.message || r.error, r.ok); if (r.ok) { $('ckText').value = ''; loadCk(); } });
+$('ckClear').addEventListener('click', async () => { if (!confirm('Supprimer les cookies YouTube enregistrés ?')) return; const r = await post('/api/settings/youtube-cookies', {clear: true}); say('ckMsg', r.message || r.error, r.ok); loadCk(); });
+loadCk();
 keyForm('emby', '/api/settings/emby'); keyForm('tmdb', '/api/settings/tmdb'); loadPaths(); loadNight();
 </script>
 </body>

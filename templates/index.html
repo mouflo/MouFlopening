@@ -130,6 +130,7 @@
         <div class="stat" id="statSeasons"><b id="nSeasons">–</b>saisons sans thème</div>
         <label class="check"><input type="checkbox" id="batchSeasons" checked> avec les saisons</label>
         <button class="btn" id="batchStart">⚡ Télécharger tous les thèmes manquants</button>
+        <button class="btn ghost" id="dupStart">🔎 Doublons de saisons</button>
         <button class="btn ghost" id="normStart">🔊 Normaliser les thèmes existants</button>
         <button class="btn danger" id="batchStop" style="display:none">■ Arrêter</button>
         <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
@@ -138,6 +139,7 @@
         <div class="livehead"><span id="liveTitle">Dernier traitement</span><span><button type="button" class="btn ghost small" id="liveMore">Tout voir</button> <button type="button" class="btn ghost small" id="liveClose" style="display:none" title="Fermer ce résultat">✕ Fermer</button></span></div>
         <div class="livewin" id="batchLogTxt"></div>
     </div>
+    <div class="panel" id="dupBox" style="display:none;margin-bottom:16px"></div>
     <div id="globalNote"></div>
 
     <div class="layout">
@@ -229,7 +231,7 @@ async function loadLibrary(keepSelection) {
     const w = mine.filter(i => i.has_theme).length;
     $('lblItems').textContent = movie ? 'films' : catKind() === 'anime' ? 'animes' : 'séries';
     fillFilter();
-    $('statSeasons').style.display = movie ? 'none' : ''; $('batchSeasons').parentElement.style.display = movie ? 'none' : '';
+    $('statSeasons').style.display = movie ? 'none' : ''; $('dupStart').style.display = movie ? 'none' : ''; $('batchSeasons').parentElement.style.display = movie ? 'none' : '';
     const sk = mine.filter(i => i.skipped).length;
     $('nTotal').textContent = mine.length; $('nWith').textContent = w; $('nWithout').textContent = mine.length - w - sk;
     $('nSkipped').textContent = sk; $('statSkipped').style.display = sk ? '' : 'none';
@@ -516,6 +518,25 @@ $('batchStop').addEventListener('click', async () => { await post('/api/batch/st
 $('filterText').addEventListener('input', () => { listCollapsed = false; renderList(); });
 $('filterState').addEventListener('change', () => { listCollapsed = false; renderList(); });
 loadLibrary().then(pollBatch);
+
+// ---------- doublons de saisons ----------
+$('dupStart').addEventListener('click', async () => {
+    const box = $('dupBox'); box.style.display = ''; box.innerHTML = '<div class="stp cur"><span class="spin"></span>Comparaison des thèmes des séries et de leurs saisons…</div>';
+    const r = await api('/api/duplicates');
+    if (r.error) { box.innerHTML = `<div class="note err">${esc(r.error)}</div>`; return; }
+    if (!r.seasons) { box.innerHTML = '<div class="note ok">✅ Aucun doublon : aucune saison n\'a le même thème que la série ou qu\'une autre saison.</div><div style="margin-top:8px"><button class="btn ghost small" id="dupClose">Fermer</button></div>'; $('dupClose').onclick = () => box.style.display = 'none'; return; }
+    box.innerHTML = `<div style="margin-bottom:8px"><b>${r.seasons} saison(s)</b> ont exactement le même thème que ${''}la série ou qu'une autre saison (AnimeThemes n'a probablement pas de fiche propre à ces saisons). Décoche celles que tu veux garder.</div>
+        <div style="max-height:45vh;overflow-y:auto">${r.series.map(x => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(x.series)}</b> <small style="color:var(--muted)">(thème de ${x.keep === 'série' ? 'la série' : 'la saison ' + esc(x.keep)} gardé)</small><br>${x.dups.map(d => `<label class="check" style="margin:4px 0"><input type="checkbox" class="dupck" value="${esc(d.id)}" checked> Saison ${d.number} : même thème</label>`).join('')}</div>`).join('')}</div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="dupFix">Remettre les saisons cochées dans « sans thème »</button><button class="btn ghost" id="dupClose">Fermer</button></div>
+        <div class="hint" style="margin-top:6px">Rien n'est supprimé : les fichiers vont dans le dossier des anciens thèmes. Ensuite tu choisis à la main (avec écoute) le bon thème de chaque saison.</div><div id="dupMsg"></div>`;
+    $('dupClose').onclick = () => box.style.display = 'none';
+    $('dupFix').onclick = async () => {
+        const ids = [...document.querySelectorAll('.dupck:checked')].map(c => c.value);
+        if (!ids.length || !confirm(ids.length + ' saison(s) vont être remises dans « sans thème » (les fichiers sont mis de côté, pas supprimés). Continuer ?')) return;
+        const f = await post('/api/duplicates/fix', {ids}); note($('dupMsg'), f.error || `${f.count} saison(s) remise(s) dans « sans thème ».`, f.error ? 'err' : 'ok');
+        if (!f.error) { await loadLibrary(true); $('dupFix').style.display = 'none'; }
+    };
+});
 
 </script>
 </body>

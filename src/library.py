@@ -173,6 +173,17 @@ def guess_kind(name: str) -> Optional[str]:
     return None
 
 
+def auto_subfolders(parent) -> List[Path]:
+    """Sous-dossiers directs du dossier des médiathèques (sans les dossiers système ni cachés)."""
+    if not parent or not Path(parent).is_dir():
+        return []
+    try:
+        return [sub for sub in sorted(Path(parent).iterdir(), key=lambda f: f.name.lower())
+                if sub.is_dir() and sub.name not in IGNORED_DIRS and not sub.name.startswith((".", "@", "#"))]
+    except OSError:
+        return []
+
+
 def discover_categories(cfg: dict, ignored: Optional[list] = None) -> List[dict]:
     """
     Les onglets : [{"name", "kind", "paths": [...], "ok"}], dans l'ordre Animes, Séries, Films.
@@ -199,14 +210,15 @@ def discover_categories(cfg: dict, ignored: Optional[list] = None) -> List[dict]
         for path in ([c["path"]] if c.get("path") else []) + list(c.get("paths") or []):
             add(c.get("kind") or guess_kind(c.get("name") or Path(path).name), path, c.get("name"))
     parent = lib.get("auto_parent")
-    if parent and Path(parent).is_dir():
-        for sub in sorted(Path(parent).iterdir(), key=lambda f: f.name.lower()):
-            if sub.is_dir() and sub.name not in IGNORED_DIRS and not sub.name.startswith((".", "@", "#")):
-                kind = guess_kind(sub.name)
-                if kind:
-                    add(kind, str(sub))
-                elif ignored is not None:
-                    ignored.append(sub.name)
+    excluded, kinds = set(lib.get("excluded") or []), dict(lib.get("kinds") or {})
+    for sub in auto_subfolders(parent):
+        if str(sub) in excluded:                              # décoché dans les Réglages
+            continue
+        kind = kinds.get(str(sub)) or guess_kind(sub.name)
+        if kind:
+            add(kind, str(sub))
+        elif ignored is not None:
+            ignored.append(sub.name)
     for path in lib.get("paths", []) or []:
         add(guess_kind(Path(path).name) or "series", path)
     return [{"name": g["name"] or DEFAULT_NAMES[k], "kind": k, "paths": g["paths"],

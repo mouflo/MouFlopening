@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.0] - 2026-10-05
+
+### Ajouté
+- Réglages · Dossiers : chaque sous-dossier du dossier des médiathèques est proposé avec une case à cocher et un menu « Films / Séries / Animes » (le type est deviné d'après le nom, modifiable ; un dossier au nom inconnu s'active en choisissant son type)
+- Réglages · Dossiers : « ➕ Ajouter un dossier » pour un dossier situé ailleurs, et explorateur « 📂 Parcourir » pour naviguer dans les dossiers du serveur au lieu de taper un chemin (il ne montre que des dossiers et ne modifie rien)
+- Contrôle « 🔎 Doublons de saisons » : repère les saisons qui ont exactement le même thème que la série (saison 1 exceptée) ou qu'une autre saison, et permet de les remettre dans « sans thème » (les fichiers vont dans le dossier des anciens thèmes, rien n'est supprimé)
+- Réglages · Cookies YouTube (facultatif) : coller un fichier cookies.txt pour aider quand YouTube demande une connexion ou refuse un téléchargement. Gardé sur le serveur (droits 600), jamais affiché ni écrit dans le Journal
+- Réglages · Lot de nuit : option « Remplir aussi les saisons des animes »
+
+### Corrigé
+- Animes : une saison 2 ou plus ne reçoit plus automatiquement le même thème que la série ou qu'une autre saison (cas où AnimeThemes n'a pas de fiche propre à la saison et où la recherche retombait sur celle de la saison 1) : elle reste « sans thème » pour un choix manuel. L'origine de chaque thème est mémorisée (data/theme_sources.json)
+
 ## [0.20.0] - 2026-10-05
 
 ### Ajouté

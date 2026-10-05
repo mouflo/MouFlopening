@@ -45,7 +45,7 @@ def settings():
     except (OSError, ValueError):
         d = {}
     return {"enabled": bool(d.get("enabled", False)), "hour": min(23, max(0, int(d.get("hour", 3)))),
-            "last_run": d.get("last_run", ""), "last_summary": d.get("last_summary", "")}
+            "seasons": bool(d.get("seasons", True)), "last_run": d.get("last_run", ""), "last_summary": d.get("last_summary", "")}
 
 
 def save(**changes):

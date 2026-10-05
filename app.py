@@ -175,8 +175,12 @@ def _backup_existing(folder):
             logger.info("Ancien thème mis de côté : %s", dest / name)
 
 
-def _download_replace(source, url, folder, trusted=False):
-    """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)"""
+SOURCES_FILE = BASE_DIR / "data" / "theme_sources.json"
+
+
+def _download_replace(source, url, folder, trusted=False, forbid_same_as=None):
+    """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)
+    forbid_same_as : (dossier de la série) : refuse un thème identique à celui de la série ou d'une autre saison."""
     tmp = folder / "theme.nouveau.partiel"
     progress.say("Téléchargement du thème…")
     try:
@@ -189,9 +193,21 @@ def _download_replace(source, url, folder, trusted=False):
         except OSError:
             pass
         return False, getattr(source, "last_error", "") or "téléchargement ou conversion impossible (détails : bouton Journal)"
+    if forbid_same_as is not None:
+        from src import dupes
+        try:
+            mine = dupes.digest(tmp)
+            for other, theme in dupes.sibling_themes(forbid_same_as, folder):
+                if dupes.digest(theme) == mine:
+                    tmp.unlink()
+                    return False, "même thème que " + ("la série" if other == forbid_same_as else other.name) + " (AnimeThemes n'a pas de fiche propre à cette saison) : à choisir à la main"
+        except OSError:
+            pass
     progress.say("Mise en place du thème (l'ancien est mis de côté)…")
     _backup_existing(folder)
     safe_move(tmp, folder / THEME_FILENAME)
+    from src import dupes
+    dupes.remember_source(SOURCES_FILE, folder, url)
     return True, ""
 
 
@@ -361,7 +377,13 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
                     result = source.search(alt, mtype)
             if not result:
                 return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
-        ok, why = _download_replace(source, result.url, folder, trusted=(kind != "anime"))   # films/séries : vidéo choisie par ThemerrDB
+            if number is not None and number >= 2:    # saison 2 et suivantes : jamais le même thème que la série ou une autre saison
+                from src import dupes
+                known = dupes.load_sources(SOURCES_FILE)
+                if any(known.get(str(f)) == result.url for f, _t in dupes.sibling_themes(series, folder)):
+                    return False, f"AnimeThemes n'a pas de fiche propre à la saison {number} (même thème que la série ou une autre saison) : à choisir à la main"
+        ok, why = _download_replace(source, result.url, folder, trusted=(kind != "anime"),
+                                    forbid_same_as=series if (kind == "anime" and number is not None and number >= 2) else None)   # films/séries : vidéo choisie par ThemerrDB
         if not ok:
             return False, why
     emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
@@ -593,6 +615,31 @@ def api_save():
     return jsonify({"job": progress.start(lambda: _save_work(data))})
 
 
+@app.route("/api/duplicates")
+def api_duplicates():
+    from src import dupes
+    movie_roots = {i for i, c in enumerate(ROOT_CAT) if CATS[c]["kind"] == "movie"}
+    found = dupes.find_duplicates(ROOTS, movie_roots)
+    return jsonify({"series": found, "seasons": sum(len(x["dups"]) for x in found)})
+
+
+@app.route("/api/duplicates/fix", methods=["POST"])
+def api_duplicates_fix():
+    """Remet des saisons dans « sans thème » : leur thème en double est mis de côté (jamais supprimé)."""
+    ids = (request.get_json(silent=True) or {}).get("ids") or []
+    n = 0
+    with _work_lock:
+        for item_id in ids:
+            folder, series, number = library.resolve_target(ROOTS, str(item_id))
+            if not folder or number is None or not find_theme(folder):
+                continue
+            _backup_existing(folder)
+            skipped.remove(folder)
+            n += 1
+    logger.info("Doublons de saisons : %d thème(s) mis de côté", n)
+    return jsonify({"ok": True, "count": n})
+
+
 @app.route("/api/skip", methods=["POST"])
 def api_skip():
     data = request.get_json(silent=True) or {}
@@ -746,7 +793,7 @@ def _nightly_run():
         for i, c in enumerate(CATS):
             with _batch_lock:
                 BATCH["running"] = True
-            by_cat.append(_run_batch(None, c["kind"] == "anime", i))
+            by_cat.append(_run_batch(None, c["kind"] == "anime" and nightly.settings()["seasons"], i))
     except Exception:
         logger.exception("Lot de nuit interrompu")
     text = nightly.format_report(by_cat, time.time() - t0)

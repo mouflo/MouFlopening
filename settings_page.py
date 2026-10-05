@@ -15,6 +15,7 @@ from pathlib import Path
 from flask import jsonify, render_template, request
 
 from emby_settings import _write_secret
+from src import library, ytcookies
 
 logger = logging.getLogger(__name__)
 _URL_RE = re.compile(r"^https?://[^\s/]+(:\d{1,5})?(/\S*)?$")
@@ -27,16 +28,59 @@ def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby,
     def settings_page():
         return render_template("reglages.html", version=version_fn())
 
+    def _folders(cfg):
+        """Les dossiers de médiathèque proposés : sous-dossiers du dossier parent (cochés ou non) + dossiers ajoutés à la main."""
+        lib = cfg.get("library", {})
+        excluded, kinds = set(lib.get("excluded") or []), dict(lib.get("kinds") or {})
+        out = []
+        for sub in library.auto_subfolders(lib.get("auto_parent")):
+            kind = kinds.get(str(sub)) or library.guess_kind(sub.name) or ""
+            out.append({"path": str(sub), "name": sub.name, "kind": kind, "guess": library.guess_kind(sub.name) or "",
+                        "enabled": bool(kind) and str(sub) not in excluded, "auto": True})
+        for c in lib.get("categories", []) or []:
+            if isinstance(c, dict):
+                for path in ([c["path"]] if c.get("path") else []) + list(c.get("paths") or []):
+                    out.append({"path": path, "name": Path(path).name or path, "kind": c.get("kind") or library.guess_kind(c.get("name") or Path(path).name) or "series",
+                                "guess": "", "enabled": True, "auto": False, "label": c.get("name") or ""})
+        return out
+
     @app.route("/api/settings/paths")
     def paths_state():
-        lib = get_config().get("library", {})
+        cfg = get_config(); lib = cfg.get("library", {})
         return jsonify({
             "emby_host": emby.host,
             "auto_parent": lib.get("auto_parent", ""),
-            "backup_dir": (get_config().get("themes", {}) or {}).get("backup_dir") or backup_default,
+            "backup_dir": (cfg.get("themes", {}) or {}).get("backup_dir") or backup_default,
+            "folders": _folders(cfg),
             "tabs": [{"name": c["name"], "kind": c["kind"], "paths": c["paths"], "ok": c["ok"]} for c in get_cats()],
             "ignored": list(get_ignored()),
         })
+
+    @app.route("/api/fs/list")
+    def fs_list():
+        """Explorateur de dossiers pour choisir un chemin : ne montre que des dossiers, ne modifie rien."""
+        raw = request.args.get("path", "") or "/mnt"
+        try:
+            path = Path(raw).resolve()
+        except (OSError, RuntimeError):
+            return jsonify({"error": "Chemin invalide"}), 400
+        if not path.is_absolute() or not path.is_dir():
+            path = Path("/")
+        dirs = []
+        try:
+            for sub in sorted(path.iterdir(), key=lambda f: f.name.lower()):
+                if sub.name.startswith((".", "@", "#")) or sub.name in library.IGNORED_DIRS:
+                    continue
+                try:
+                    if sub.is_dir():
+                        dirs.append(sub.name)
+                except OSError:
+                    pass
+        except PermissionError:
+            return jsonify({"path": str(path), "parent": str(path.parent) if path != path.parent else "", "dirs": [], "note": "Accès refusé à ce dossier"})
+        except OSError as e:
+            return jsonify({"error": f"Dossier illisible : {e.__class__.__name__}"}), 400
+        return jsonify({"path": str(path), "parent": str(path.parent) if path != path.parent else "", "dirs": dirs})
 
     @app.route("/api/settings/emby-host", methods=["POST"])
     def emby_host_save():
@@ -53,22 +97,65 @@ def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby,
     def paths_save():
         body = request.get_json(silent=True) or {}
         parent, backup = str(body.get("auto_parent", "")).strip(), str(body.get("backup_dir", "")).strip()
-        if not parent or not Path(parent).is_dir():
+        folders = body.get("folders") or []
+        if parent and not Path(parent).is_dir():
             return jsonify({"ok": False, "error": f"Dossier introuvable sur le serveur : « {parent} ». Rien n'a été enregistré."}), 400
         if backup and not (Path(backup).is_dir() or Path(backup).parent.is_dir()):
             return jsonify({"ok": False, "error": f"Le dossier des anciens thèmes « {backup} » n'est pas accessible (le partage est-il monté ?). Rien n'a été enregistré."}), 400
+        excluded, kinds, extras = [], {}, []
+        for f in folders:
+            if not isinstance(f, dict):
+                continue
+            path, kind, on = str(f.get("path", "")).strip(), str(f.get("kind", "")), bool(f.get("enabled"))
+            if kind not in library.KINDS and not (kind == "" and not on):
+                return jsonify({"ok": False, "error": f"Choisis le type (film, série ou anime) du dossier « {path} »."}), 400
+            if f.get("auto"):
+                if not on:
+                    excluded.append(path)
+                elif kind != library.guess_kind(Path(path).name):
+                    kinds[path] = kind
+            elif on:
+                if not Path(path).is_dir():
+                    return jsonify({"ok": False, "error": f"Dossier introuvable sur le serveur : « {path} »."}), 400
+                item = {"kind": kind, "path": path}
+                if f.get("label"):
+                    item["name"] = str(f["label"])
+                extras.append(item)
         path = base_dir / "config.json"
         try:
             cfg = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         except ValueError:
             return jsonify({"ok": False, "error": "config.json est illisible : rien n'a été modifié."}), 500
-        cfg.setdefault("library", {})["auto_parent"] = parent
+        lib = cfg.setdefault("library", {})
+        lib["auto_parent"] = parent
+        lib["excluded"], lib["kinds"], lib["categories"] = excluded, kinds, extras
         if backup:
             cfg.setdefault("themes", {})["backup_dir"] = backup
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, path)
-        logger.info("Dossiers mis à jour depuis la page web : %s · sauvegardes : %s", parent, backup or "(inchangé)")
+        logger.info("Dossiers mis à jour depuis la page web : parent %s · %d décoché(s) · %d ajouté(s) · sauvegardes : %s", parent, len(excluded), len(extras), backup or "(inchangé)")
         if body.get("restart", True):                          # le service redémarre tout seul (systemd) et relit les dossiers
             threading.Thread(target=lambda: (time.sleep(1.5), os._exit(0)), daemon=True).start()
         return jsonify({"ok": True, "restart": bool(body.get("restart", True)), "message": "Enregistré. L'appli redémarre pour relire les dossiers…"})
+
+    @app.route("/api/settings/youtube-cookies")
+    def yt_cookies_state():
+        return jsonify(ytcookies.state())
+
+    @app.route("/api/settings/youtube-cookies", methods=["POST"])
+    def yt_cookies_save():
+        body = request.get_json(silent=True) or {}
+        if body.get("clear"):
+            ytcookies.clear()
+            logger.info("Cookies YouTube supprimés")
+            return jsonify({"ok": True, "message": "Cookies supprimés."})
+        text = str(body.get("text", ""))
+        ok, msg, _n = ytcookies.validate(text)
+        if not ok:
+            return jsonify({"ok": False, "error": msg}), 400
+        if body.get("test"):
+            return jsonify({"ok": True, "message": msg})
+        ytcookies.save(text)
+        logger.info("Cookies YouTube enregistrés (%s)", msg)
+        return jsonify({"ok": True, "message": "Enregistré : " + msg})
