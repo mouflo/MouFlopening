@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.1] - 2026-10-05
+
+### Corrigé
+- Un téléchargement raté ne fait plus perdre le thème en place : le nouveau est d'abord reçu à côté, et l'ancien n'est mis de côté qu'une fois le nouveau bien enregistré (avant, l'ancien était déjà déplacé quand le téléchargement échouait)
+- Message clair quand YouTube refuse une vidéo (« cette vidéo n'est plus disponible… choisis-en une autre », connexion demandée, vidéo trop longue, refus 403) au lieu de « voir le Journal »
+
 ## [0.9.0] - 2026-10-05
 
 ### Ajouté

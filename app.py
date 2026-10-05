@@ -151,6 +151,24 @@ def _backup_existing(folder):
             logger.info("Ancien thème mis de côté : %s", dest / name)
 
 
+def _download_replace(source, url, folder):
+    """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)"""
+    tmp = folder / "theme.nouveau.partiel"
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    if not source.download(url, tmp):
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False, getattr(source, "last_error", "") or "téléchargement ou conversion impossible (détails : bouton Journal)"
+    _backup_existing(folder)
+    safe_move(tmp, folder / THEME_FILENAME)
+    return True, ""
+
+
 def _read_registry():
     try:
         return json.loads(NORMALIZED_FILE.read_text())
@@ -244,9 +262,9 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
                 result = source.search(alt, mtype)
         if not result:
             return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
-        _backup_existing(folder)
-        if not source.download(result.url, folder / THEME_FILENAME):
-            return False, "téléchargement ou conversion impossible (voir le Journal)"
+        ok, why = _download_replace(source, result.url, folder)
+        if not ok:
+            return False, why
     emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
     return True, f"{result.title} · {emby['message']}"
 
@@ -416,10 +434,9 @@ def api_save():
     if not source.is_allowed_url(url):
         return jsonify({"error": "Adresse non autorisée (seuls animethemes.moe et youtube.com sont acceptés)"}), 400
     with _work_lock:
-        _backup_existing(folder)
-        ok = source.download(url, folder / THEME_FILENAME)
+        ok, why = _download_replace(source, url, folder)
     if not ok:
-        return jsonify({"error": "Téléchargement ou conversion impossible (détails : bouton Journal)"}), 502
+        return jsonify({"error": "Thème non enregistré : " + why + ". L'ancien thème (s'il y en avait un) est conservé."}), 502
     emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind, series.parent.name)
     logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
     return jsonify({"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]})

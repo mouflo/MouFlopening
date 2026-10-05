@@ -38,6 +38,7 @@ class YouTubeSource(BaseSource):
         self.timeout = config.get("timeout", 60)
         self.max_duration = int(config.get("max_duration", 600))
         self.target_db = target_db
+        self.last_error = ""
 
     # ------------------------------------------------------------------ recherche
 
@@ -130,6 +131,7 @@ class YouTubeSource(BaseSource):
             return False
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        self.last_error = ""
         logger.info("[YouTube] Téléchargement : %s", url)
         with tempfile.TemporaryDirectory() as tmp:
             err = self._yt_download(url, tmp)
@@ -137,10 +139,12 @@ class YouTubeSource(BaseSource):
                 err = self._yt_download(url, tmp)          # une fois, avec la version à jour
             if err:
                 logger.error("[YouTube] Téléchargement impossible : %s", err)
+                self.last_error = _friendly(err)
                 return False
             files = sorted(Path(tmp).glob("source.*"))
             if not files:
                 logger.error("[YouTube] Aucun fichier reçu (vidéo trop longue ou refusée)")
+                self.last_error = "vidéo trop longue ou refusée : choisis-en une autre"
                 return False
             out = Path(tmp) / "theme.mp3"
             if not convert_to_mp3(files[0], out, self.target_db):
@@ -155,6 +159,19 @@ class YouTubeSource(BaseSource):
 # ---------------------------------------------------------------------------
 
 _last_upgrade = 0.0
+
+
+def _friendly(err: str) -> str:
+    e = err.lower()
+    if "not available" in e or "unavailable" in e or "private video" in e or "removed" in e:
+        return "cette vidéo n'est plus disponible sur YouTube (retirée, privée ou bloquée dans ton pays) : choisis-en une autre"
+    if "sign in" in e or "age" in e and "restrict" in e:
+        return "YouTube demande une connexion pour cette vidéo : choisis-en une autre"
+    if "403" in e or "forbidden" in e:
+        return "YouTube a refusé le téléchargement (403) : réessaie dans quelques minutes"
+    if "duration" in e or "does not pass filter" in e:
+        return "vidéo trop longue pour un thème : choisis-en une plus courte"
+    return "téléchargement impossible (détails : bouton Journal)"
 
 
 def _looks_outdated(err: str) -> bool:
