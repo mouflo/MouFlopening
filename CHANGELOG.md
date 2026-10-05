@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.0] - 2026-10-05
+
+### Ajouté
+- **Progression en direct** pendant la recherche : la page affiche chaque étape au fur et à mesure (titre original, ThemerrDB trouvé ou non, recherche YouTube, vérification des dates, classement) avec un compteur de secondes, au lieu d'un « Recherche sur YouTube… » figé
+- **Progression en direct** quand on clique sur « Utiliser » : connexion à YouTube, pourcentage de téléchargement, nouvel essai si YouTube refuse, conversion et réglage du volume, mise en place du thème, mise à jour d'Emby
+
 ## [0.11.3] - 2026-10-05
 
 ### Corrigé

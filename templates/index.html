@@ -61,6 +61,12 @@
     .row .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .pill { font-size:.72rem; padding:2px 8px; border-radius:10px; background:var(--field); color:var(--muted); white-space:nowrap; }
     .pill.ok { background:rgba(82,181,75,.18); color:#9bdc95; }
+    .steps { padding:14px 4px; font-size:.9rem; }
+    .stp { padding:3px 0; color:var(--muted); }
+    .stp.cur { color:var(--text, #fff); font-weight:600; }
+    .stp small { color:var(--muted); font-weight:400; margin-left:6px; }
+    .spin { display:inline-block; width:12px; height:12px; margin-right:8px; border:2px solid var(--muted); border-top-color:var(--accent); border-radius:50%; animation:mfspin .8s linear infinite; vertical-align:-1px; }
+    @keyframes mfspin { to { transform:rotate(360deg); } }
     .empty { color:var(--muted); padding:30px 10px; text-align:center; }
     .detail h2 { margin:0 0 4px; font-size:1.2rem; }
     .detail .path { color:var(--muted); font-size:.8rem; margin-bottom:14px; word-break:break-all; }
@@ -160,6 +166,28 @@ async function api(url, opts) {
     return data;
 }
 const post = (url, body) => api(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+// Opération longue suivie en direct : le serveur annonce chaque étape, on l'affiche au fur et à mesure
+async function runJob(url, body, onSteps) {
+    const start = await post(url, body);
+    if (start.error) return start;
+    const steps = []; let since = 0, fails = 0;
+    for (;;) {
+        await new Promise(r => setTimeout(r, 400));
+        let st;
+        try { st = await api('/api/job/' + start.job + '?since=' + since); } catch (e) { st = {error: String(e)}; }
+        if (st.error) { if (++fails > 15) return {error: st.error}; continue; }
+        fails = 0; since = st.next;
+        steps.push(...st.steps);
+        onSteps(steps, st.elapsed, st.done);
+        if (st.done) return (st.result && st.result[0]) || {error: 'Réponse vide'};
+    }
+}
+function stepsHtml(steps, elapsed, done) {
+    const past = steps.slice(0, -1).map(s => `<div class="stp done">✓ ${esc(s.text)}</div>`).join('');
+    const last = steps[steps.length - 1];
+    const cur = done ? '' : `<div class="stp cur"><span class="spin"></span>${esc(last ? last.text : 'Démarrage…')} <small>${Math.floor(elapsed)} s</small></div>`;
+    return past + (done && last ? `<div class="stp done">✓ ${esc(last.text)}</div>` : cur);
+}
 function note(el, text, kind) { el.innerHTML = text ? `<div class="note ${kind || 'ok'}">${esc(text)}</div>` : ''; }
 
 // ---------- liste ----------
@@ -297,8 +325,9 @@ function refreshCurrent() {
 
 async function search() {
     const title = $('q').value.trim(); if (!title) return;
-    $('cands').innerHTML = `<div class="empty">Recherche sur ${sourceName()}…</div>`; note($('msg'), '');
-    const data = await post('/api/search', {title, cat: curCat, id: target.id, original: origOn});
+    $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), '');
+    const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn},
+        (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; });
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), (data.note ? data.note + '. ' : '') + 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
@@ -336,8 +365,11 @@ async function search() {
     document.querySelectorAll('#cands button[data-a]').forEach(b => b.addEventListener('click', async () => {
         const t = res[b.dataset.a].themes[b.dataset.t];
         b.disabled = true; b.textContent = '…';
-        const r = await post('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title});
-        b.disabled = false; b.textContent = 'Utiliser';
+        document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = true);
+        const r = await runJob('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title},
+            (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; });
+        document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = false);
+        b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
         if (!r.error) {
             document.querySelectorAll('.cand').forEach(c => c.classList.toggle('chosen', c.dataset.ai === b.dataset.a));

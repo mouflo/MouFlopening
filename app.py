@@ -106,6 +106,7 @@ def kind_of(item_id):
 
 app = Flask(__name__)
 
+from src import progress
 from src.netfix import repair_urllib3
 
 
@@ -174,6 +175,7 @@ def _backup_existing(folder):
 def _download_replace(source, url, folder):
     """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)"""
     tmp = folder / "theme.nouveau.partiel"
+    progress.say("Téléchargement du thème…")
     try:
         tmp.unlink()
     except OSError:
@@ -184,6 +186,7 @@ def _download_replace(source, url, folder):
         except OSError:
             pass
         return False, getattr(source, "last_error", "") or "téléchargement ou conversion impossible (détails : bouton Journal)"
+    progress.say("Mise en place du thème (l'ancien est mis de côté)…")
     _backup_existing(folder)
     safe_move(tmp, folder / THEME_FILENAME)
     return True, ""
@@ -418,12 +421,10 @@ def api_library():
     return jsonify({"items": items, "emby": EMBY.configured, "categories": cats})
 
 
-@app.route("/api/search", methods=["POST"])
-def api_search():
-    body = request.get_json(silent=True) or {}
+def _search_work(body):
     title = body.get("title", "").strip()
     if not title:
-        return jsonify({"error": "Titre vide"}), 400
+        return {"error": "Titre vide"}, 400
     try:
         kind = CATS[int(body.get("cat", 0))]["kind"]
     except (ValueError, IndexError):
@@ -436,6 +437,7 @@ def api_search():
     if body.get("original"):
         # titre original d'après Emby / TheMovieDB (le titre français ne donne pas toujours de résultat)
         if series:
+            progress.say("Recherche du titre original (Emby, puis TheMovieDB)…")
             orig, why = original_title_for(series, title, kind)
             if orig and orig.casefold() not in (t.casefold() for t in titles):
                 titles.insert(0, orig)                    # le titre original a plus de chances d'avoir des sources : on le cherche en premier
@@ -451,13 +453,16 @@ def api_search():
 
     results, seen = [], set()
     if series and kind != "anime":
+        progress.say("Consultation de ThemerrDB (thème validé par la communauté)…")
         tr, _why = themerr_for(series, kind)
+        progress.say("ThemerrDB : thème trouvé ★" if tr else "ThemerrDB : rien pour ce titre")
         if tr:
             from src.sources.youtube import watch_url
             seen.add(tr["video_id"])
             results.append({"name": "★ " + (tr["title"] or title), "year": "base ThemerrDB", "channel": "choix validé par la communauté",
                             "score": 100, "themes": [{"slug": "▶", "type": "yt", "youtube": tr["video_id"], "url": watch_url(tr["video_id"])}]})
-    for t in titles:
+    for i, t in enumerate(titles, 1):
+        progress.say(f"Recherche {'AnimeThemes' if kind == 'anime' else 'sur YouTube'} : « {t} »" + (f" ({i}/{len(titles)})" if len(titles) > 1 else "") + "…")
         try:
             found = run(t)
         except Exception:
@@ -471,28 +476,50 @@ def api_search():
                 continue
             seen.add(key)
             results.append(r)
+    progress.say("Classement des résultats…")
     results.sort(key=lambda r: -int(r.get("score") or 0))     # la sélection ThemerrDB (score 100) reste en tête
-    return jsonify({"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note})
+    return {"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note}, 200
+
+
+@app.route("/api/search", methods=["POST"])
+def api_search():
+    body = request.get_json(silent=True) or {}
+    return jsonify({"job": progress.start(lambda: _search_work(body))})
+
+
+@app.route("/api/job/<jid>")
+def api_job(jid):
+    st = progress.status(jid, int(request.args.get("since", 0) or 0))
+    if st is None:
+        return jsonify({"error": "Opération inconnue (l'appli a peut-être redémarré)"}), 404
+    return jsonify(st)
+
+
+def _save_work(data):
+    folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
+    url = data.get("url", "")
+    if not folder:
+        return {"error": "Série ou saison introuvable"}, 404
+    kind = kind_of(data.get("id", ""))
+    source = source_for(kind)
+    if not source.is_allowed_url(url):
+        return {"error": "Adresse non autorisée (seuls animethemes.moe et youtube.com sont acceptés)"}, 400
+    if _work_lock.locked():
+        progress.say("En attente : un autre traitement est en cours…")
+    with _work_lock:
+        ok, why = _download_replace(source, url, folder)
+        if not ok:
+            return {"error": "Thème non enregistré : " + why + ". L'ancien thème (s'il y en avait un) est conservé."}, 502
+        progress.say("Mise à jour d'Emby…")
+        emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind, series.parent.name)
+    logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
+    return {"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]}, 200
 
 
 @app.route("/api/save", methods=["POST"])
 def api_save():
     data = request.get_json(silent=True) or {}
-    folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
-    url = data.get("url", "")
-    if not folder:
-        return jsonify({"error": "Série ou saison introuvable"}), 404
-    kind = kind_of(data.get("id", ""))
-    source = source_for(kind)
-    if not source.is_allowed_url(url):
-        return jsonify({"error": "Adresse non autorisée (seuls animethemes.moe et youtube.com sont acceptés)"}), 400
-    with _work_lock:
-        ok, why = _download_replace(source, url, folder)
-    if not ok:
-        return jsonify({"error": "Thème non enregistré : " + why + ". L'ancien thème (s'il y en avait un) est conservé."}), 502
-    emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind, series.parent.name)
-    logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
-    return jsonify({"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]})
+    return jsonify({"job": progress.start(lambda: _save_work(data))})
 
 
 @app.route("/api/auto", methods=["POST"])

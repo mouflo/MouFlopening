@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..fsutil import safe_move
+from ..progress import say
 from .base_source import BaseSource, ThemeResult
 from ..audio import REFERENCE_DB, convert_to_mp3
 from ..matching import similarity
@@ -105,8 +106,10 @@ class YouTubeSource(BaseSource):
         queries = [f"{title} {k}" for k in self._keywords(media_type)]
         if year:
             queries += [f"{title} {year} theme", f"{title} {year} soundtrack"]
+        say(f"YouTube : {len(queries)} recherches en parallèle…")
         with ThreadPoolExecutor(max_workers=len(queries)) as pool:
             batches = list(pool.map(lambda q: self._raw_search(q, 8), queries))
+        say(f"YouTube : {sum(len(b) for b in batches)} vidéos reçues, tri par pertinence…")
         seen, entries = set(), []
         for batch in batches:                      # sans doublon, en gardant l'ordre de pertinence de YouTube
             for e in batch:
@@ -117,6 +120,7 @@ class YouTubeSource(BaseSource):
         entries.sort(key=lambda e: -self._score(title, e))
         entries = entries[:max(limit * 2, 14)]
         if year:
+            say(f"Vérification des dates de mise en ligne (film de {year})…")
             self._upload_years(entries)
             for e in entries:
                 u = e.get("_year")
@@ -156,6 +160,16 @@ class YouTubeSource(BaseSource):
             opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
                     "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
                     "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {self.max_duration}")}
+            def hook(d):
+                if d.get("status") == "downloading":
+                    tot = d.get("total_bytes") or d.get("total_bytes_estimate")
+                    if tot and d.get("downloaded_bytes") is not None:
+                        pct = int(100 * d["downloaded_bytes"] / tot)
+                        if pct >= self._last_pct + 10 or pct == 100:
+                            self._last_pct = pct
+                            say(f"Téléchargement depuis YouTube : {pct} %")
+            self._last_pct = -10
+            opts["progress_hooks"] = [hook]
             if clients:
                 opts["extractor_args"] = {"youtube": {"player_client": list(clients)}}
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -171,14 +185,17 @@ class YouTubeSource(BaseSource):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         self.last_error = ""
         logger.info("[YouTube] Téléchargement : %s", url)
+        say("Connexion à YouTube…")
         with tempfile.TemporaryDirectory() as tmp:
             err = self._yt_download(url, tmp, self._good_clients)       # le profil qui a marché la dernière fois d'abord
             if err and _looks_outdated(err):
+                say("YouTube a refusé : mise à jour de yt-dlp…")
                 if _upgrade_ytdlp():
                     err = self._yt_download(url, tmp)      # avec la version à jour
                 if err and _looks_outdated(err):           # YouTube refuse parfois un profil de lecteur mais pas les autres
                     for clients in (("tv", "web_safari"), ("mweb", "ios"), ("web_embedded", "android")):
                         logger.info("[YouTube] Nouvel essai avec le profil %s", "+".join(clients))
+                        say(f"YouTube a refusé : nouvel essai avec un autre profil ({'+'.join(clients)})…")
                         err = self._yt_download(url, tmp, clients)
                         if not err:
                             YouTubeSource._good_clients = clients      # on s'en souvient pour les prochains téléchargements
@@ -198,6 +215,7 @@ class YouTubeSource(BaseSource):
                 logger.error("[YouTube] Aucun fichier reçu (vidéo trop longue ou refusée)")
                 self.last_error = "vidéo trop longue ou refusée : choisis-en une autre"
                 return False
+            say("Conversion en MP3 et réglage du volume (89 dB)…")
             out = Path(tmp) / "theme.mp3"
             if not convert_to_mp3(files[0], out, self.target_db):
                 return False
