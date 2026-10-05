@@ -23,6 +23,8 @@ _URL_RE = re.compile(r"^https?://[^\s/]+(:\d{1,5})?(/\S*)?$")
 
 def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby, backup_default, get_db=None, set_db=None):
     base_dir = Path(base_dir)
+    import fs_browser
+    fs_browser.init_app(app)
 
     @app.route("/reglages")
     def settings_page():
@@ -55,32 +57,6 @@ def init_app(app, base_dir, version_fn, get_config, get_cats, get_ignored, emby,
             "tabs": [{"name": c["name"], "kind": c["kind"], "paths": c["paths"], "ok": c["ok"]} for c in get_cats()],
             "ignored": list(get_ignored()),
         })
-
-    @app.route("/api/fs/list")
-    def fs_list():
-        """Explorateur de dossiers pour choisir un chemin : ne montre que des dossiers, ne modifie rien."""
-        raw = request.args.get("path", "") or "/mnt"
-        try:
-            path = Path(raw).resolve()
-        except (OSError, RuntimeError):
-            return jsonify({"error": "Chemin invalide"}), 400
-        if not path.is_absolute() or not path.is_dir():
-            path = Path("/")
-        dirs = []
-        try:
-            for sub in sorted(path.iterdir(), key=lambda f: f.name.lower()):
-                if sub.name.startswith((".", "@", "#")) or sub.name in library.IGNORED_DIRS:
-                    continue
-                try:
-                    if sub.is_dir():
-                        dirs.append(sub.name)
-                except OSError:
-                    pass
-        except PermissionError:
-            return jsonify({"path": str(path), "parent": str(path.parent) if path != path.parent else "", "dirs": [], "note": "Accès refusé à ce dossier"})
-        except OSError as e:
-            return jsonify({"error": f"Dossier illisible : {e.__class__.__name__}"}), 400
-        return jsonify({"path": str(path), "parent": str(path.parent) if path != path.parent else "", "dirs": dirs})
 
     @app.route("/api/settings/emby-host", methods=["POST"])
     def emby_host_save():

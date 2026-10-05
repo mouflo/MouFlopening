@@ -89,13 +89,6 @@
         <div id="nightMsg"></div>
     </div>
 </div>
-<div class="modalbg" id="browseBg"><div class="modalbox">
-    <h2 style="margin:0">📂 Choisir un dossier</h2>
-    <div class="cur" id="browseCur">/</div>
-    <div class="dirs" id="browseDirs"></div>
-    <div id="browseNote" class="state"></div>
-    <div class="row"><button class="btn ghost" id="browseUp">⬆ Remonter</button><button class="btn" id="browsePick">✅ Choisir ce dossier</button><button class="btn ghost" id="browseCancel">Annuler</button></div>
-</div></div>
 <script>
 // ----- Emby : adresse, dossiers -----
 let folders = [];
@@ -138,29 +131,13 @@ $('pathsSave').addEventListener('click', async () => {
     say('pathsMsg', 'L\'appli met longtemps à revenir : recharge la page dans un instant.', 'warn');
 });
 
-// ----- explorateur de dossiers -----
-let browseTarget = null, browsePath = '/';
-async function browse(path) {
-    const r = await api('/api/fs/list?path=' + encodeURIComponent(path));
-    if (r.error) { $('browseNote').textContent = r.error; return; }
-    browsePath = r.path; $('browseCur').textContent = r.path; $('browseNote').textContent = r.note || (r.dirs.length ? '' : 'Aucun sous-dossier ici.');
-    $('browseDirs').innerHTML = r.dirs.map(n => `<div data-n="${esc(n)}">📁 ${esc(n)}</div>`).join('');
-    $('browseUp').disabled = !r.parent; $('browseUp').dataset.parent = r.parent || '';
-}
-document.addEventListener('click', e => { const b = e.target.closest('[data-browse]'); if (b) { browseTarget = b.dataset.browse; $('browseBg').classList.add('show'); browse($(browseTarget) ? $(browseTarget).value || '/mnt' : '/mnt'); } });
-$('folderAdd').addEventListener('click', () => { browseTarget = '#new'; $('browseBg').classList.add('show'); browse('/mnt'); });
-$('browseDirs').addEventListener('click', e => { const d = e.target.closest('[data-n]'); if (d) browse(browsePath.replace(/\/$/, '') + '/' + d.dataset.n); });
-$('browseUp').addEventListener('click', () => browse($('browseUp').dataset.parent || '/'));
-$('browseCancel').addEventListener('click', () => $('browseBg').classList.remove('show'));
-$('browsePick').addEventListener('click', () => {
-    $('browseBg').classList.remove('show');
-    if (browseTarget === '#new') {
-        if (folders.some(f => f.path === browsePath)) return say('pathsMsg', 'Ce dossier est déjà dans la liste.', 'warn');
-        const name = browsePath.split('/').filter(Boolean).pop() || browsePath;
-        folders.push({path: browsePath, name, kind: '', guess: '', enabled: false, auto: false}); renderFolders();
-        say('pathsMsg', 'Dossier ajouté : choisis ce qu\'il contient (film, série ou anime) pour l\'activer.', 'warn');
-    } else $(browseTarget).value = browsePath;
-});
+// ----- explorateur de dossiers (voir ui/mou-settings.js) -----
+$('folderAdd').addEventListener('click', () => browseFolder('/mnt', path => {
+    if (folders.some(f => f.path === path)) return say('pathsMsg', 'Ce dossier est déjà dans la liste.', 'warn');
+    const name = path.split('/').filter(Boolean).pop() || path;
+    folders.push({path, name, kind: '', guess: '', enabled: false, auto: false}); renderFolders();
+    say('pathsMsg', 'Dossier ajouté : choisis ce qu\'il contient (film, série ou anime) pour l\'activer.', 'warn');
+}));
 
 // ----- lot de nuit + Telegram -----
 $('nightHour').innerHTML = Array.from({length: 24}, (_, h) => `<option value="${h}">${String(h).padStart(2, '0')} h</option>`).join('');

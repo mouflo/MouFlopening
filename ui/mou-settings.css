@@ -38,4 +38,4 @@
     .tabsinfo { font-size:.88rem; color:var(--muted); line-height:1.6; }
     .tabsinfo b { color:var(--text); }
     .back { display:inline-block; margin-bottom:12px; color:var(--muted); text-decoration:none; }
-    @media (max-width:800px) { body { padding:10px; } .field input, .field select { font-size:16px; } .row .btn { flex:1 1 100%; padding:12px; } }
+    @media (max-width:800px) { .row.nowrap .btn { flex:0 0 auto; padding:12px 14px; } .row.nowrap input { flex:1 1 0; } body { padding:10px; } .field input, .field select { font-size:16px; } .row .btn { flex:1 1 100%; padding:12px; } }

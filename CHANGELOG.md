@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.1] - 2026-10-05
+
+### Amélioré
+- L'explorateur de dossiers de la page Réglages est maintenant un outil commun aux trois applis (`fs_browser.py` et `ui/mou-settings.js`)
+
+### Corrigé
+- Sur téléphone, les champs de chemin (avec le bouton « Parcourir ») étaient écrasés à quelques pixels de large
+
 ## [0.24.0] - 2026-10-05
 
 ### Ajouté
