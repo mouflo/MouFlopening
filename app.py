@@ -173,7 +173,7 @@ def _batch_state_text():
 def _run_batch(limit, with_seasons, cat=0):
     kind = CATS[cat]["kind"]
     roots = list(CATS[cat]["paths"])
-    todo = [("série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
+    todo = [("film" if kind == "movie" else "série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
     if with_seasons and kind != "movie":
         todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
     if limit:
@@ -182,14 +182,14 @@ def _run_batch(limit, with_seasons, cat=0):
         BATCH.update(kind="download", running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
     _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)"))
     try:
-        for kind, title, folder, series, number in todo:
+        for _what, title, folder, series, number in todo:
             if BATCH["stop"]:
                 _batch_note("Arrêt demandé")
                 break
             label = title if number is None else f"{title} — saison {number}"
             with _batch_lock:
                 BATCH["current"] = label
-            ok, msg = _auto_one(folder, title, series, number, kind=kind)
+            ok, msg = _auto_one(folder, title, series, number, kind=kind)   # kind = type de l'onglet (anime / série / film)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
@@ -221,8 +221,11 @@ def _run_normalize():
     from src.audio import normalize_file
     files = []
     skipped_other = 0
+    movie_roots = [Path(p) for c in CATS if c["kind"] == "movie" for p in c["paths"]]
     for series in library.iter_series_folders(ROOTS):
-        for label, folder in [("série", series)] + [(f"saison {n}", f) for n, f in library.season_folders(series)]:
+        is_movie = any(r in series.parents for r in movie_roots)
+        extra = [] if is_movie else [(f"saison {n}", f) for n, f in library.season_folders(series)]
+        for label, folder in [("film" if is_movie else "série", series)] + extra:
             theme = find_theme(folder)
             if theme is None:
                 continue

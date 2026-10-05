@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.3] - 2026-10-05
+
+### Corrigé
+- Barre de progression : les films n'apparaissent plus comme « série » (libellé « film » pour l'onglet Films, et plus de saisons cherchées pour un film)
+- Recherche automatique de tout un onglet : le type de l'onglet (anime, série, film) n'était plus transmis, donc YouTube était utilisé même pour les animes. Chaque onglet utilise de nouveau sa bonne source (AnimeThemes pour les animes)
+
 ## [0.6.2] - 2026-10-05
 
 ### Amélioré
