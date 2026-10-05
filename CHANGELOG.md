@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.25.2] - 2026-10-06
+
+### Corrigé
+- « Erreur interne : PermissionError » quand le NAS refuse l'écriture dans un dossier (vu sur « Demon Slayer / Specials ») : les restes d'un essai précédent (`theme.nouveau.partiel…`) sont retirés avant d'écrire, et si l'écriture reste impossible, un message clair explique pourquoi (fichier temporaire bloqué ou dossier en lecture seule) ; l'ancien thème est toujours conservé
+
 ## [0.25.1] - 2026-10-06
 
 ### Corrigé

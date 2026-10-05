@@ -208,19 +208,40 @@ SOURCES_FILE = BASE_DIR / "data" / "theme_sources.json"
 TRANSIENT = "⏳ "      # début des messages d'échec passager (réseau, écriture) : le titre n'est pas « mis de côté »
 
 
+def _write_problem(folder, err):
+    """Explique simplement pourquoi on ne peut pas écrire dans un dossier du NAS."""
+    stuck = [p.name for p in folder.glob("*.partiel*")] if folder.is_dir() else []
+    if stuck:
+        return (f"un fichier temporaire bloqué ({', '.join(stuck[:3])}) empêche l'écriture dans « {folder.name} » : "
+                "supprime-le depuis le NAS (ou vérifie ses droits), puis réessaie")
+    if not os.access(folder, os.W_OK):
+        return f"le dossier « {folder.name} » est en lecture seule pour l'appli (droits du dossier sur le NAS)"
+    return f"écriture impossible dans « {folder.name} » ({getattr(err, 'strerror', None) or err}) : vérifie les droits du dossier sur le NAS"
+
+
+def _clear_partials(folder):
+    """Restes d'un essai précédent (theme.nouveau.partiel, …partiel.partiel) : retirés avant d'écrire."""
+    for p in folder.glob("theme*.partiel"):          # couvre aussi « …partiel.partiel »
+        try:
+            p.unlink()
+        except OSError as e:
+            logger.warning("Fichier temporaire impossible à supprimer : %s (%s)", p, e)
+
+
 def _download_replace(source, url, folder, trusted=False, forbid_same_as=None, any_url=False):
     """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)
     forbid_same_as : (dossier de la série) : refuse un thème identique à celui de la série ou d'une autre saison."""
     tmp = folder / "theme.nouveau.partiel"
     progress.say("Téléchargement du thème…")
+    _clear_partials(folder)
     try:
-        tmp.unlink()
-    except OSError:
-        pass
-    if any_url:
-        done = source.download(url, tmp, trusted=True, any_url=True)
-    else:
-        done = source.download(url, tmp, trusted=True) if trusted and hasattr(source, "_probe_duration") else source.download(url, tmp)
+        if any_url:
+            done = source.download(url, tmp, trusted=True, any_url=True)
+        else:
+            done = source.download(url, tmp, trusted=True) if trusted and hasattr(source, "_probe_duration") else source.download(url, tmp)
+    except OSError as e:                       # le son est prêt mais le dossier du NAS refuse l'écriture
+        logger.error("Écriture impossible dans %s : %s", folder, e)
+        return False, TRANSIENT + _write_problem(folder, e)
     if not done:
         try:
             tmp.unlink()
@@ -246,7 +267,7 @@ def _download_replace(source, url, folder, trusted=False, forbid_same_as=None, a
             tmp.unlink()
         except OSError:
             pass
-        return False, f"écriture impossible dans le dossier ({e.strerror or e}) : l'ancien thème est conservé"
+        return False, TRANSIENT + _write_problem(folder, e) + " (l'ancien thème est conservé)"
     from src import dupes
     dupes.remember_source(SOURCES_FILE, folder, url)
     return True, ""
@@ -743,9 +764,18 @@ def _custom_file_work(item_id, title, tmp_src, original_name):
                 if not convert_to_mp3(Path(tmp_src), out, TARGET_DB):
                     return {"error": "Ce fichier n'a pas pu être lu comme un son (détails : bouton Journal). L'ancien thème est conservé."}, 502
                 tmp = folder / "theme.nouveau.partiel"               # copié à côté d'abord : le thème en place n'est touché qu'une fois le nouveau prêt
-                safe_move(out, tmp)
-            progress.say("Mise en place du thème (l'ancien est mis de côté)…")
-            _install_theme(tmp, folder)
+                _clear_partials(folder)
+                try:
+                    safe_move(out, tmp)
+                    progress.say("Mise en place du thème (l'ancien est mis de côté)…")
+                    _install_theme(tmp, folder)
+                except OSError as e:
+                    logger.error("Écriture impossible dans %s : %s", folder, e)
+                    try:
+                        tmp.unlink()
+                    except OSError:
+                        pass
+                    return {"error": "Thème non enregistré : " + _write_problem(folder, e) + ". L'ancien thème est conservé."}, 502
             from src import dupes
             dupes.remember_source(SOURCES_FILE, folder, "fichier : " + original_name)
             progress.say("Mise à jour d'Emby…")
