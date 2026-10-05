@@ -30,6 +30,8 @@ def _get(path: str, key: str, params: dict):
         headers["Authorization"] = f"Bearer {key}"
     else:
         params["api_key"] = key
+    from .netfix import repair_urllib3
+    repair_urllib3()
     return requests.get(_TMDB + path, params=params, headers=headers, timeout=8)
 
 

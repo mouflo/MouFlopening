@@ -23,6 +23,8 @@ def lookup(kind: str, tmdb_id: int, timeout: float = 8) -> Tuple[Optional[dict],
         return None, ""
     path = "movies" if kind == "movie" else "tv_shows"
     try:
+        from ..netfix import repair_urllib3
+        repair_urllib3()
         r = requests.get(f"{_BASE}/{path}/themoviedb/{int(tmdb_id)}.json", timeout=timeout)
     except requests.exceptions.RequestException as e:
         logger.info("[ThemerrDB] injoignable : %s", e)

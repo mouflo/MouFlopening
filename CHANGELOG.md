@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.11.3] - 2026-10-05
+
+### Corrigé
+- Recherche d'un film ou d'une série : l'erreur « 'Urllib3PercentREOverride' object has no attribute 'sub' » est corrigée. Elle venait d'une incompatibilité entre yt-dlp et la bibliothèque de requêtes (urllib3) : une fois yt-dlp chargé, plus aucune requête vers TheMovieDB, ThemerrDB ou Emby ne passait. La pièce abîmée est remise en état avant chaque requête
+
 ## [0.11.2] - 2026-10-05
 
 ### Amélioré

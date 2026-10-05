@@ -106,6 +106,13 @@ def kind_of(item_id):
 
 app = Flask(__name__)
 
+from src.netfix import repair_urllib3
+
+
+@app.before_request
+def _repair_http():
+    repair_urllib3()          # yt-dlp abîme urllib3 : on le répare avant chaque requête (voir src/netfix.py)
+
 import auth
 import diag
 
