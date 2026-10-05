@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.1] - 2026-10-05
+
+### Ajouté
+- Bouton **« 🔑 Clé Emby »** : on colle la clé dans la page, elle est testée auprès d'Emby puis enregistrée dans `data/secrets.env` (plus besoin de ligne de commande)
+
 ## [0.5.0] - 2026-10-05
 
 ### Ajouté

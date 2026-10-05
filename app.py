@@ -354,6 +354,14 @@ def api_batch_status():
 
 
 os.environ['_TARGET_DB'] = f'{TARGET_DB:g}'
+import emby_settings
+
+
+def _emby_key_changed(key):
+    EMBY.api_key = key
+
+
+emby_settings.init_app(app, BASE_DIR, lambda: EMBY.host, _emby_key_changed)
 diag.init_app(app, APP_VERSION, lambda: ROOTS, EMBY.describe, _batch_state_text)
 
 if __name__ == "__main__":
