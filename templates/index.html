@@ -71,6 +71,9 @@
     .detail h2 { margin:0 0 4px; font-size:1.2rem; }
     .detail .path { color:var(--muted); font-size:.8rem; margin-bottom:14px; word-break:break-all; }
     .search-row { display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
+    details.custom { background:var(--field); border-radius:6px; padding:10px 12px; margin-bottom:10px; }
+    details.custom summary { cursor:pointer; }
+    details.custom input[type=file] { flex:1; min-width:180px; color:var(--text); }
     .search-row input { flex:1; min-width:180px; }
     .current { background:var(--field); border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:.9rem; }
     .current audio { width:100%; margin-top:6px; }
@@ -180,7 +183,7 @@ const post = (url, body) => api(url, {method: 'POST', headers: {'Content-Type': 
 // Opération longue suivie en direct : le serveur annonce chaque étape, on l'affiche au fur et à mesure
 let currentJob = null;      // opération en cours (pour pouvoir l'arrêter, ex. « Mettre de côté »)
 async function runJob(url, body, onSteps) {
-    const start = await post(url, body);
+    const start = body instanceof FormData ? await api(url, {method: 'POST', body}) : await post(url, body);
     if (start.error) return start;
     const mine = {id: start.job, stop: false}; if (url.includes('search')) currentJob = mine;   // seule une recherche s'arrête (pas un téléchargement)
     const steps = []; let since = 0, fails = 0;
@@ -320,12 +323,39 @@ function renderDetail() {
             <button class="btn" id="btnSearch">🔍 Chercher</button>
         </div>
         <div id="skipRow"></div>
+        <details class="custom" id="customBox">
+            <summary>🎵 Utiliser mon propre thème (lien ou fichier)</summary>
+            <div class="hint">Un lien YouTube (ou autre site : SoundCloud…) ou un fichier audio de ton ordinateur. Il remplace le thème actuel (l'ancien est mis de côté, pas supprimé) et est mis au même volume que les autres.</div>
+            <div class="search-row"><input type="text" id="customUrl" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn" id="customUrlGo">Utiliser ce lien</button></div>
+            <div class="search-row"><input type="file" id="customFile" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma"><button class="btn" id="customFileGo">Envoyer ce fichier</button></div>
+        </details>
         <label class="opt"><input type="checkbox" id="optOrig" ${origOn ? 'checked' : ''}> Chercher aussi sous le titre original (d'après Emby)</label>
         <div id="msg"></div>
         <div id="cands"></div>`;
     renderTargets(); refreshCurrent();
     $('btnSearch').addEventListener('click', () => search(true));
     refreshSkip();
+    const customDone = r => {
+        note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
+        if (!r.error) { $('cands').innerHTML = ''; $('customUrl').value = ''; $('customFile').value = ''; loadLibrary(true); }
+        $('customUrlGo').disabled = $('customFileGo').disabled = false;
+    };
+    const customProgress = (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); };
+    const customAsk = () => !target.has_theme || confirm('Ce titre a déjà un thème : il sera remplacé (l\'ancien est mis de côté, pas supprimé). Continuer ?');
+    $('customUrlGo').addEventListener('click', async () => {
+        const url = $('customUrl').value.trim(); if (!url) return note($('msg'), 'Colle d\'abord un lien.', 'err');
+        if (!customAsk()) return;
+        $('customUrlGo').disabled = $('customFileGo').disabled = true;
+        customDone(await runJob('/api/custom/url', {id: target.id, url, title: selected.title}, customProgress));
+    });
+    $('customFileGo').addEventListener('click', async () => {
+        const f = $('customFile').files[0]; if (!f) return note($('msg'), 'Choisis d\'abord un fichier audio.', 'err');
+        if (!customAsk()) return;
+        $('customUrlGo').disabled = $('customFileGo').disabled = true;
+        const form = new FormData(); form.append('file', f); form.append('id', target.id); form.append('title', selected.title || '');
+        note($('msg'), 'Envoi du fichier…', 'ok');
+        customDone(await runJob('/api/custom/file', form, customProgress));
+    });
     $('optOrig').addEventListener('change', e => { origOn = e.target.checked; try { localStorage.setItem('mf_orig', origOn ? '1' : '0'); } catch (x) {} });
     $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(true); });
     if (!target.has_theme && !target.skipped) search();

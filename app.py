@@ -615,6 +615,110 @@ def api_save():
     return jsonify({"job": progress.start(lambda: _save_work(data))})
 
 
+
+# ---------- thème personnalisé : un lien (YouTube ou autre site pris en charge par yt-dlp) ou un fichier audio de l'utilisateur ----------
+AUDIO_EXTS = (".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wav", ".wma", ".mp4", ".webm", ".mka")
+MAX_UPLOAD = 150 * 1024 * 1024
+
+
+def _public_url(url):
+    """http(s) vers un site public uniquement (pas d'adresse locale ou privée : l'appli ne sert pas à atteindre le réseau de la maison). -> message d'erreur ou ''"""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+    u = urlparse(url or "")
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return "Adresse invalide : colle un lien complet commençant par https://"
+    try:
+        for info in socket.getaddrinfo(u.hostname, None):
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return "Adresse refusée : elle pointe vers le réseau local."
+    except (socket.gaierror, ValueError):
+        return "Adresse introuvable (vérifie le lien)."
+    return ""
+
+
+def _custom_url_work(data):
+    folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
+    if not folder:
+        return {"error": "Série ou saison introuvable"}, 404
+    url = str(data.get("url", "")).strip()
+    bad = _public_url(url)
+    if bad:
+        return {"error": bad}, 400
+    kind = kind_of(data.get("id", ""))
+    if _work_lock.locked():
+        progress.say("En attente : un autre traitement est en cours…")
+    with _work_lock:
+        ok, why = _download_replace(YOUTUBE, url, folder, trusted=True)
+        if not ok:
+            return {"error": "Thème non enregistré : " + why + ". L'ancien thème (s'il y en avait un) est conservé."}, 502
+        progress.say("Mise à jour d'Emby…")
+        emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind, series.parent.name)
+    logger.info("Thème personnalisé (lien) enregistré : %s", folder / THEME_FILENAME)
+    skipped.remove(folder)
+    return {"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]}, 200
+
+
+def _custom_file_work(item_id, title, tmp_src, original_name):
+    from src.audio import convert_to_mp3
+    folder, series, number = library.resolve_target(ROOTS, item_id)
+    try:
+        if not folder:
+            return {"error": "Série ou saison introuvable"}, 404
+        kind = kind_of(item_id)
+        if _work_lock.locked():
+            progress.say("En attente : un autre traitement est en cours…")
+        with _work_lock:
+            import tempfile
+            progress.say("Conversion en MP3 et réglage du volume…")
+            with tempfile.TemporaryDirectory() as work:
+                out = Path(work) / "theme.mp3"                       # ffmpeg déduit le format de l'extension
+                if not convert_to_mp3(Path(tmp_src), out, TARGET_DB):
+                    return {"error": "Ce fichier n'a pas pu être lu comme un son (détails : bouton Journal). L'ancien thème est conservé."}, 502
+                tmp = folder / "theme.nouveau.partiel"               # copié à côté d'abord : le thème en place n'est touché qu'une fois le nouveau prêt
+                safe_move(out, tmp)
+            progress.say("Mise en place du thème (l'ancien est mis de côté)…")
+            _backup_existing(folder)
+            safe_move(tmp, folder / THEME_FILENAME)
+            from src import dupes
+            dupes.remember_source(SOURCES_FILE, folder, "fichier : " + original_name)
+            progress.say("Mise à jour d'Emby…")
+            emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
+        logger.info("Thème personnalisé (fichier « %s ») enregistré : %s", original_name, folder / THEME_FILENAME)
+        skipped.remove(folder)
+        return {"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]}, 200
+    finally:
+        try:
+            os.unlink(tmp_src)
+        except OSError:
+            pass
+
+
+@app.route("/api/custom/url", methods=["POST"])
+def api_custom_url():
+    data = request.get_json(silent=True) or {}
+    return jsonify({"job": progress.start(lambda: _custom_url_work(data))})
+
+
+@app.route("/api/custom/file", methods=["POST"])
+def api_custom_file():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "Aucun fichier reçu"}), 400
+    if not f.filename.lower().endswith(AUDIO_EXTS):
+        return jsonify({"error": "Format non pris en charge (mp3, m4a, flac, ogg, wav…)"}), 400
+    if (request.content_length or 0) > MAX_UPLOAD:
+        return jsonify({"error": "Fichier trop gros (150 Mo maximum)"}), 413
+    import tempfile
+    fd, tmp_src = tempfile.mkstemp(suffix=Path(f.filename).suffix.lower())
+    os.close(fd)
+    f.save(tmp_src)
+    item_id, title, name = request.form.get("id", ""), request.form.get("title", ""), Path(f.filename).name
+    return jsonify({"job": progress.start(lambda: _custom_file_work(item_id, title, tmp_src, name))})
+
+
 @app.route("/api/duplicates")
 def api_duplicates():
     from src import dupes

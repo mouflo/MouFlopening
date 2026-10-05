@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.0] - 2026-10-05
+
+### Ajouté
+- « 🎵 Utiliser mon propre thème » sur chaque série, saison ou film : coller un lien (YouTube, ou autre site pris en charge par yt-dlp comme SoundCloud) ou envoyer un fichier audio de son ordinateur (mp3, m4a, flac, ogg, wav… 150 Mo maximum). Le thème est converti en MP3, mis au même volume que les autres, et remplace l'actuel (l'ancien est mis de côté, pas supprimé). Pratique pour choisir le thème d'un héros plutôt qu'un générique de saison
+- Les liens vers le réseau local ou une adresse privée sont refusés (l'appli ne sert pas à atteindre le réseau de la maison)
+
 ## [0.21.1] - 2026-10-05
 
 ### Corrigé
