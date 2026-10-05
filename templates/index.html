@@ -176,20 +176,28 @@ async function api(url, opts) {
 }
 const post = (url, body) => api(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
 // Opération longue suivie en direct : le serveur annonce chaque étape, on l'affiche au fur et à mesure
+let currentJob = null;      // opération en cours (pour pouvoir l'arrêter, ex. « Mettre de côté »)
 async function runJob(url, body, onSteps) {
     const start = await post(url, body);
     if (start.error) return start;
+    const mine = {id: start.job, stop: false}; if (url.includes('search')) currentJob = mine;   // seule une recherche s'arrête (pas un téléchargement)
     const steps = []; let since = 0, fails = 0;
     for (;;) {
         await new Promise(r => setTimeout(r, 400));
+        if (mine.stop) return {cancelled: true};
         let st;
         try { st = await api('/api/job/' + start.job + '?since=' + since); } catch (e) { st = {error: String(e)}; }
         if (st.error) { if (++fails > 15) return {error: st.error}; continue; }
         fails = 0; since = st.next;
         steps.push(...st.steps);
         onSteps(steps, st.elapsed, st.done);
-        if (st.done) return (st.result && st.result[0]) || {error: 'Réponse vide'};
+        if (st.done) { if (currentJob === mine) currentJob = null; return (st.result && st.result[0]) || {error: 'Réponse vide'}; }
     }
+}
+function stopCurrentJob() {
+    if (!currentJob) return;
+    currentJob.stop = true; const id = currentJob.id; currentJob = null;
+    api('/api/job/' + id + '/cancel', {method: 'POST'}).catch(() => {});
 }
 // Sur téléphone la progression est sous l'écran : on la place à environ un tiers de la hauteur, et on la suit si elle redescend
 function ensureVisible(el) {
@@ -344,6 +352,7 @@ function refreshSkip() {
         : `<div class="hint"><button class="btn ghost small" id="btnSkip">⏭ Mettre de côté</button> pour ne plus le voir dans « sans thème »</div>`;
     $('btnSkip').addEventListener('click', async () => {
         const want = !target.skipped;
+        if (want && currentJob) { stopCurrentJob(); $('cands').innerHTML = ''; note($('msg'), ''); }   // recherche en cours : on l'arrête tout de suite
         const r = await post('/api/skip', {id: target.id, skip: want});
         if (r.error) return note($('msg'), r.error, 'err');
         await loadLibrary(true); refreshSkip();
@@ -387,6 +396,7 @@ async function search(full) {
     $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), ''); ensureVisible($('cands'));
     const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn, full: full === true, exclude: [...blockedVideos]},
         (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (!done) ensureVisible($('cands')); });
+    if (data.cancelled) return;
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) {

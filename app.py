@@ -553,6 +553,11 @@ def api_job(jid):
     return jsonify(st)
 
 
+@app.route("/api/job/<jid>/cancel", methods=["POST"])
+def api_job_cancel(jid):
+    return jsonify({"ok": progress.cancel(jid)})
+
+
 def _save_work(data):
     folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
     url = data.get("url", "")

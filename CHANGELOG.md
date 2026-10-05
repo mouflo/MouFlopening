@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.17.0] - 2026-10-05
+
+### Amélioré
+- « ⏭ Mettre de côté » pendant une recherche l'arrête tout de suite (la page n'attend plus la fin, et le serveur cesse de chercher sur YouTube à l'étape suivante) puis met le titre de côté
+
 ## [0.16.5] - 2026-10-05
 
 ### Corrigé
