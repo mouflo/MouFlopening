@@ -7,10 +7,8 @@ cd "$REPO_DIR"
 
 chmod +x deploy.sh setup-cronjob.sh
 
-if [ ! -d venv ]; then
-    python3 -m venv venv
-    ./venv/bin/pip install -q -r requirements.txt
-fi
+[ -d venv ] || python3 -m venv venv
+./venv/bin/pip install -q -r requirements.txt
 
 [ -f config.json ] || cp config.example.json config.json
 
