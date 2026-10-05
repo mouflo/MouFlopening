@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2026-10-05
+
+### Ajouté
+- **Normalisation à 89 dB** de chaque thème (référence ReplayGain, celle de MP3Gain), mesurée puis appliquée précisément pendant la conversion, avec un limiteur à -1 dBFS contre la saturation. Réglable : `audio.target_db` dans `config.json`
+- **Thèmes de saison** : `theme.mp3` dans chaque dossier de saison (Season 1, Saison 02, S03, Specials), choix manuel par saison (onglets Série / Saison 1 / Saison 2…), actualisation Emby de la saison concernée
+- Lot automatique : case « avec les saisons » (saison N cherchée sous « Titre Season N »)
+- Filtre « Saison sans thème » et compteur de saisons dans la liste
+
 ## [0.2.0] - 2026-10-05
 
 ### Ajouté

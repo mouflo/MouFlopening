@@ -6,7 +6,6 @@ Documentation de l'API : https://api-docs.animethemes.moe
 
 import logging
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from .base_source import BaseSource, ThemeResult
+from ..audio import REFERENCE_DB, convert_to_mp3
 from ..matching import similarity
 
 logger = logging.getLogger(__name__)
@@ -27,13 +27,14 @@ class AnimeThemesSource(BaseSource):
 
     name = "AnimeThemes"
 
-    def __init__(self, config: Dict[str, Any], threshold: int = 70):
+    def __init__(self, config: Dict[str, Any], threshold: int = 70, target_db: float = REFERENCE_DB):
         super().__init__(config)
         self.api_url = config.get("api_url", "https://api.animethemes.moe").rstrip("/")
         self.timeout = config.get("timeout", 30)
         # Ordre de préférence : le générique d'ouverture d'abord, puis la fin
         self.theme_types: List[str] = config.get("theme_types", ["OP", "ED"])
         self.threshold = config.get("threshold", threshold)
+        self.target_db = target_db
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/json", "User-Agent": "MouFlopening/0.2"})
 
@@ -160,15 +161,7 @@ class AnimeThemesSource(BaseSource):
                 return False
 
             tmp_out = Path(tmp) / "theme.mp3"
-            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-vn",
-                   "-codec:a", "libmp3lame", "-q:a", "2", str(tmp_out)]
-            try:
-                subprocess.run(cmd, check=True, capture_output=True, timeout=120)
-            except FileNotFoundError:
-                logger.error("[AnimeThemes] ffmpeg introuvable (apt install ffmpeg)")
-                return False
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                logger.error("[AnimeThemes] Conversion MP3 échouée : %s", e)
+            if not convert_to_mp3(raw, tmp_out, self.target_db):
                 return False
 
             shutil.move(str(tmp_out), str(output_path))  # fonctionne aussi vers le NAS (autre disque)

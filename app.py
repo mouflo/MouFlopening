@@ -9,6 +9,7 @@ MouFlopening - interface web (même conception que MouFloster et MouFlanimeXer).
 """
 
 import logging
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -41,8 +42,9 @@ APP_VERSION = get_version()
 CONFIG = load_config()
 ROOTS = CONFIG.get("library", {}).get("paths", [])
 EMBY = EmbyClient(CONFIG.get("emby", {}))
+TARGET_DB = float(CONFIG.get("audio", {}).get("target_db", 89))   # niveau de chaque thème (référence ReplayGain / MP3Gain)
 SOURCE = AnimeThemesSource(CONFIG.get("sources", {}).get("animethemes", {"enabled": True}),
-                           threshold=CONFIG.get("matching", {}).get("threshold", 70))
+                           threshold=CONFIG.get("matching", {}).get("threshold", 70), target_db=TARGET_DB)
 
 app = Flask(__name__)
 
@@ -78,24 +80,27 @@ def _batch_state_text():
             f"(ajoutés {b['done']}, introuvables {b['failed']}) · en cours : {b['current'] or '-'}")
 
 
-def _run_batch(limit):
-    todo = library.missing_themes(ROOTS)
+def _run_batch(limit, with_seasons):
+    todo = [("série", title, folder, folder, None) for title, folder in library.missing_themes(ROOTS)]
+    if with_seasons:
+        todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(ROOTS)]
     if limit:
         todo = todo[:limit]
     with _batch_lock:
         BATCH.update(running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
-    _batch_note(f"{len(todo)} série(s) à traiter")
+    _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)"))
     try:
-        for title, folder in todo:
+        for kind, title, folder, series, number in todo:
             if BATCH["stop"]:
                 _batch_note("Arrêt demandé")
                 break
+            label = title if number is None else f"{title} — saison {number}"
             with _batch_lock:
-                BATCH["current"] = title
-            ok, msg = _auto_one(folder, title)
+                BATCH["current"] = label
+            ok, msg = _auto_one(folder, title, series, number)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
-            _batch_note(("✅ " if ok else "❌ ") + f"{title} — {msg}")
+            _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
     except Exception:
         logger.exception("Le lot s'est arrêté sur une erreur")
         _batch_note("⚠️ Erreur inattendue (détails dans le Journal)")
@@ -104,15 +109,17 @@ def _run_batch(limit):
             BATCH.update(running=False, current="")
 
 
-def _auto_one(folder, title):
-    """Choisit automatiquement le meilleur générique, l'enregistre et prévient Emby. -> (succès, message)"""
+def _auto_one(folder, title, series=None, number=None, query=None):
+    """Choisit automatiquement le meilleur générique, l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
+    series = series or folder
+    query = query or (title if number is None else library.season_query(title, number))
     with _work_lock:
-        result = SOURCE.search(title, "anime")
+        result = SOURCE.search(query, "anime")
         if not result:
-            return False, "aucun générique trouvé sur AnimeThemes"
+            return False, f"aucun générique trouvé sur AnimeThemes pour « {query} »"
         if not SOURCE.download(result.url, folder / THEME_FILENAME):
             return False, "téléchargement ou conversion impossible (voir le Journal)"
-    emby = EMBY.refresh_series(folder.name, title)
+    emby = EMBY.refresh_series(series.name, title, number)
     return True, f"{result.title} · {emby['message']}"
 
 # ---------------------------------------------------------------------------
@@ -122,7 +129,7 @@ def _auto_one(folder, title):
 
 @app.route("/")
 def index():
-    return render_template("index.html", version=APP_VERSION)
+    return render_template("index.html", version=APP_VERSION, target_db=f"{TARGET_DB:g}")
 
 
 @app.route("/api/library")
@@ -142,17 +149,17 @@ def api_search():
 @app.route("/api/save", methods=["POST"])
 def api_save():
     data = request.get_json(silent=True) or {}
-    folder = library.resolve_folder(ROOTS, data.get("id", ""))
+    folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
     url = data.get("url", "")
     if not folder:
-        return jsonify({"error": "Série introuvable"}), 404
+        return jsonify({"error": "Série ou saison introuvable"}), 404
     if not SOURCE.is_allowed_url(url):
         return jsonify({"error": "Adresse non autorisée (seul animethemes.moe est accepté)"}), 400
     with _work_lock:
         ok = SOURCE.download(url, folder / THEME_FILENAME)
     if not ok:
         return jsonify({"error": "Téléchargement ou conversion impossible (détails : bouton Journal)"}), 502
-    emby = EMBY.refresh_series(folder.name, data.get("title", ""))
+    emby = EMBY.refresh_series(series.name, data.get("title", ""), number)
     logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
     return jsonify({"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]})
 
@@ -160,11 +167,12 @@ def api_save():
 @app.route("/api/auto", methods=["POST"])
 def api_auto():
     data = request.get_json(silent=True) or {}
-    folder = library.resolve_folder(ROOTS, data.get("id", ""))
+    folder, series, number = library.resolve_target(ROOTS, data.get("id", ""))
     if not folder:
-        return jsonify({"error": "Série introuvable"}), 404
-    title = (data.get("title") or library.clean_title(folder.name)).strip()
-    ok, msg = _auto_one(folder, title)
+        return jsonify({"error": "Série ou saison introuvable"}), 404
+    title = library.clean_title(series.name)
+    query = (data.get("title") or "").strip() or None      # titre éventuellement corrigé à la main dans la page
+    ok, msg = _auto_one(folder, title, series, number, query)
     return jsonify({"ok": ok, "message": msg}), (200 if ok else 404)
 
 
@@ -179,12 +187,13 @@ def api_theme():
 
 @app.route("/api/batch/start", methods=["POST"])
 def api_batch_start():
-    limit = (request.get_json(silent=True) or {}).get("limit")
+    body = request.get_json(silent=True) or {}
+    limit, with_seasons = body.get("limit"), bool(body.get("seasons"))
     with _batch_lock:   # on marque « en cours » tout de suite : la page qui interroge juste après le voit
         if BATCH["running"]:
             return jsonify({"error": "Un lot est déjà en cours"}), 409
         BATCH.update(running=True, stop=False, total=0, done=0, failed=0, current="Préparation…", messages=[])
-    threading.Thread(target=_run_batch, args=(int(limit) if limit else None,), daemon=True).start()
+    threading.Thread(target=_run_batch, args=(int(limit) if limit else None, with_seasons), daemon=True).start()
     return jsonify({"ok": True})
 
 
@@ -200,6 +209,7 @@ def api_batch_status():
         return jsonify(dict(BATCH))
 
 
+os.environ['_TARGET_DB'] = f'{TARGET_DB:g}'
 diag.init_app(app, APP_VERSION, lambda: ROOTS, EMBY.describe, _batch_state_text)
 
 if __name__ == "__main__":

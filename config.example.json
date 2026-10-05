@@ -67,5 +67,8 @@
     "paths": [
       "/mnt/mouflosyno/Emby-Media/Manga"
     ]
+  },
+  "audio": {
+    "target_db": 89
   }
 }

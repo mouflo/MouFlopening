@@ -37,6 +37,47 @@ def missing_themes(roots: List[str]) -> List[Tuple[str, Path]]:
             if not (f / THEME_FILENAME).exists()]
 
 
+def missing_season_themes(roots: List[str]) -> List[Tuple[str, int, Path, Path]]:
+    """Saisons sans theme.mp3 : liste de (titre de la série, numéro de saison, dossier de saison, dossier de série)."""
+    out = []
+    for series in iter_series_folders(roots):
+        for number, folder in season_folders(series):
+            if number >= 1 and not (folder / THEME_FILENAME).exists():   # les « Specials » se choisissent à la main
+                out.append((clean_title(series.name), number, folder, series))
+    return out
+
+
+# Dossiers de saison : « Season 1 », « Saison 02 », « S01 », « Specials » (= saison 0)
+_SEASON_RE = re.compile(r"^(?:season|saison|s)[\s._-]*0*(\d{1,3})$", re.I)
+
+
+def parse_season_folder(name: str) -> Optional[int]:
+    """Numéro de saison d'après le nom du dossier, ou None si ce n'est pas un dossier de saison."""
+    if name.strip().lower() in ("specials", "special", "spéciaux", "speciaux"):
+        return 0
+    m = _SEASON_RE.match(name.strip())
+    return int(m.group(1)) if m else None
+
+
+def season_folders(series: Path) -> List[Tuple[int, Path]]:
+    """Dossiers de saison d'une série, triés par numéro."""
+    out = []
+    try:
+        for sub in series.iterdir():
+            if sub.is_dir() and sub.name not in IGNORED_DIRS and not sub.name.startswith("."):
+                n = parse_season_folder(sub.name)
+                if n is not None:
+                    out.append((n, sub))
+    except OSError:
+        return []
+    return sorted(out, key=lambda t: t[0])
+
+
+def season_query(title: str, number: int) -> str:
+    """Titre à chercher sur AnimeThemes pour une saison (la saison 1 se cherche sous le titre seul)."""
+    return title if number <= 1 else f"{title} Season {number}"
+
+
 def list_library(roots: List[str]) -> List[dict]:
     """Toutes les séries avec leur état. `id` = « numéro_du_dossier_racine/nom_du_dossier »."""
     items = []
@@ -46,19 +87,38 @@ def list_library(roots: List[str]) -> List[dict]:
             continue
         for folder in sorted(base.iterdir(), key=lambda f: f.name.lower()):
             if folder.is_dir() and folder.name not in IGNORED_DIRS and not folder.name.startswith("."):
+                seasons = [{"id": f"{i}/{folder.name}/{sub.name}", "name": sub.name, "number": n,
+                            "has_theme": (sub / THEME_FILENAME).exists()} for n, sub in season_folders(folder)]
                 items.append({"id": f"{i}/{folder.name}", "name": folder.name, "title": clean_title(folder.name),
-                              "has_theme": (folder / THEME_FILENAME).exists()})
+                              "has_theme": (folder / THEME_FILENAME).exists(), "seasons": seasons})
     return items
 
 
 def resolve_folder(roots: List[str], item_id: str) -> Optional[Path]:
-    """Retrouve le dossier d'une série à partir de son id, ou None si l'id est invalide (jamais hors médiathèque)."""
+    """Dossier d'une série (« 0/Serie ») ou d'une de ses saisons (« 0/Serie/Season 1 »), ou None si l'id est invalide."""
+    return resolve_target(roots, item_id)[0]
+
+
+def resolve_target(roots: List[str], item_id: str) -> Tuple[Optional[Path], Optional[Path], Optional[int]]:
+    """(dossier visé, dossier de la série, numéro de saison ou None). Jamais en dehors de la médiathèque."""
+    none = (None, None, None)
     try:
-        idx, name = item_id.split("/", 1)
-        base = Path(roots[int(idx)])
+        parts = item_id.split("/")
+        base = Path(roots[int(parts[0])])
     except (ValueError, IndexError, AttributeError):
-        return None
-    if not name or "/" in name or "\\" in name or name in (".", "..") or name in IGNORED_DIRS:
-        return None
-    folder = base / name
-    return folder if folder.is_dir() else None
+        return none
+    if len(parts) not in (2, 3):
+        return none
+    for name in parts[1:]:
+        if not name or "\\" in name or name in (".", "..") or name in IGNORED_DIRS:
+            return none
+    series = base / parts[1]
+    if not series.is_dir():
+        return none
+    if len(parts) == 2:
+        return series, series, None
+    number = parse_season_folder(parts[2])
+    season = series / parts[2]
+    if number is None or not season.is_dir():
+        return none
+    return season, series, number

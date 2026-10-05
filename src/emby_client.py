@@ -9,7 +9,7 @@ Facultatifs : EMBY_URL, EMBY_REFRESH_MODE (ValidationOnly | Default | FullRefres
 import logging
 import os
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -59,22 +59,38 @@ class EmbyClient:
                     return item
         return None
 
-    def refresh_series(self, folder_name: str, title: str = "") -> Dict[str, Any]:
-        """Actualise la série dont le dossier s'appelle folder_name. Ne lève jamais d'exception."""
+    def _refresh_item(self, item_id: str) -> None:
+        mode = os.getenv("EMBY_REFRESH_MODE", "ValidationOnly")
+        if mode not in ("ValidationOnly", "Default", "FullRefresh"):
+            mode = "ValidationOnly"
+        self._request("POST", f"/Items/{item_id}/Refresh", params={
+            "Recursive": "false", "ImageRefreshMode": mode, "MetadataRefreshMode": mode,
+            "ReplaceAllImages": "false", "ReplaceAllMetadata": "false"})
+
+    def refresh_series(self, folder_name: str, title: str = "", season: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Actualise la série dont le dossier s'appelle folder_name (et la saison `season` si indiquée).
+        Ne lève jamais d'exception : retourne {"ok": bool, "message": str}.
+        """
         if not self.configured:
             return {"ok": False, "message": "Emby non configuré (clé API manquante)"}
         try:
             item = self._find_series(folder_name, [title])
             if not item:
                 return {"ok": False, "message": f"« {folder_name} » introuvable dans Emby (pas encore scanné ?). Thème copié quand même."}
-            mode = os.getenv("EMBY_REFRESH_MODE", "ValidationOnly")
-            if mode not in ("ValidationOnly", "Default", "FullRefresh"):
-                mode = "ValidationOnly"
-            self._request("POST", f"/Items/{item['Id']}/Refresh", params={
-                "Recursive": "false", "ImageRefreshMode": mode, "MetadataRefreshMode": mode,
-                "ReplaceAllImages": "false", "ReplaceAllMetadata": "false"})
-            logger.info("[Emby] Actualisation demandée : %s", item.get("Name") or folder_name)
-            return {"ok": True, "message": f"Emby actualise « {item.get('Name') or folder_name} »"}
+            name = item.get("Name") or folder_name
+            done = [f"« {name} »"]
+            if season is not None:
+                seasons = self._request("GET", f"/Shows/{item['Id']}/Seasons", params={"Fields": "Path"}).json().get("Items", [])
+                found = next((x for x in seasons if x.get("IndexNumber") == season), None)
+                if found:
+                    self._refresh_item(found["Id"])
+                    done.append("saison " + ("0 (spéciaux)" if season == 0 else str(season)))
+                else:
+                    done.append(f"(saison {season} absente d'Emby)")
+            self._refresh_item(item["Id"])
+            logger.info("[Emby] Actualisation demandée : %s", " · ".join(done))
+            return {"ok": True, "message": "Emby actualise " + " · ".join(done)}
         except EmbyError as e:
             return {"ok": False, "message": str(e)}
         except Exception as e:

@@ -5,7 +5,7 @@ import tempfile, sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.sources.animethemes import AnimeThemesSource
-from src.library import clean_title, missing_themes, resolve_folder, list_library
+from src.library import clean_title, missing_themes, resolve_folder, resolve_target, list_library, parse_season_folder, season_query, missing_season_themes
 
 API = {"anime": [
     {"name": "Fairy Tail", "animesynonyms": [{"text": "FT"}],
@@ -73,6 +73,28 @@ class TestLibrary(unittest.TestCase):
             (Path(d) / "A").mkdir(); (Path(d) / "B").mkdir(); (Path(d) / "B" / "theme.mp3").write_bytes(b"x")
             self.assertEqual([(i["name"], i["has_theme"]) for i in list_library([d])], [("A", False), ("B", True)])
 
+    def test_season_folders(self):
+        for name, n in [("Season 1", 1), ("Saison 02", 2), ("S03", 3), ("season_10", 10), ("Specials", 0)]:
+            self.assertEqual(parse_season_folder(name), n, name)
+        for name in ["Extras", "Season", "Seasonal", "backdrops", "S"]:
+            self.assertIsNone(parse_season_folder(name), name)
+        self.assertEqual(season_query("Fairy Tail", 1), "Fairy Tail")
+        self.assertEqual(season_query("Fairy Tail", 2), "Fairy Tail Season 2")
+
+    def test_season_targets(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = Path(d) / "Serie"
+            for n in ["Season 1", "Season 2", "Specials", "Extras"]:
+                (s / n).mkdir(parents=True)
+            (s / "Season 1" / "theme.mp3").write_bytes(b"x")
+            lib = list_library([d])[0]
+            self.assertEqual([(x["number"], x["has_theme"]) for x in lib["seasons"]], [(0, False), (1, True), (2, False)])
+            self.assertEqual(resolve_target([d], "0/Serie/Season 2"), (s / "Season 2", s, 2))
+            self.assertEqual(resolve_target([d], "0/Serie"), (s, s, None))
+            for bad in ["0/Serie/Extras", "0/Serie/../x", "0/Serie/Season 9", "0/Serie/Season 1/x"]:
+                self.assertEqual(resolve_target([d], bad), (None, None, None), bad)
+            self.assertEqual([(t, n) for t, n, _, _ in missing_season_themes([d])], [("Serie", 2)])  # ni saison 1 (déjà faite) ni Specials
+
 
 class TestUrlSafety(unittest.TestCase):
     def test_allowed_urls(self):
@@ -81,6 +103,21 @@ class TestUrlSafety(unittest.TestCase):
         self.assertTrue(ok("https://animethemes.moe/x"))
         for bad in ["http://a.animethemes.moe/x", "https://animethemes.moe.evil.com/x", "https://evil.com/animethemes.moe", "file:///etc/passwd", ""]:
             self.assertFalse(ok(bad), bad)
+
+
+class TestAudio(unittest.TestCase):
+    def test_normalizes_to_89_db(self):
+        import shutil, subprocess
+        if not shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg absent")
+        from src.audio import convert_to_mp3, measure_gain
+        with tempfile.TemporaryDirectory() as d:
+            for name, amp in [("quiet", 0.05), ("loud", 0.7)]:
+                wav, mp3 = Path(d) / f"{name}.wav", Path(d) / f"{name}.mp3"
+                subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i",
+                                f"anoisesrc=color=pink:duration=6:amplitude={amp}", str(wav)], check=True)
+                self.assertTrue(convert_to_mp3(wav, mp3, 89.0))
+                self.assertLess(abs(measure_gain(mp3)[0]), 0.6, name)   # gain restant ≈ 0 dB = niveau 89 dB
 
 
 if __name__ == "__main__":

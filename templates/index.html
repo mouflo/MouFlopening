@@ -63,6 +63,13 @@
     .theme { display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
     .theme .slug { width:48px; font-weight:600; color:var(--accent); }
     .theme audio { flex:1; min-width:180px; height:36px; }
+    .check { color:var(--muted); font-size:.9rem; display:flex; align-items:center; gap:6px; cursor:pointer; }
+    .check input { width:17px; height:17px; accent-color:var(--accent); }
+    .targets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+    .chip { padding:6px 12px; border-radius:16px; background:var(--field); border:1px solid transparent; color:var(--text); cursor:pointer; font-size:.85rem; }
+    .chip:hover { background:#383838; }
+    .chip.active { border-color:var(--accent); background:#24331f; }
+    .chip .tick { color:var(--accent); margin-left:4px; }
     .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0; }
     .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
     .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
@@ -86,13 +93,15 @@
             <form method="post" action="/logout" style="margin:0"><button type="submit" class="btn ghost small">Se déconnecter</button></form>
         </div>
         <h1>🎵 Mou<span>Flopening</span></h1>
-        <p>Thèmes musicaux pour ta médiathèque Emby</p>
+        <p>Thèmes musicaux pour ta médiathèque Emby · chaque thème est normalisé à {{ target_db }} dB</p>
     </div>
 
     <div class="toolbar">
         <div class="stat"><b id="nTotal">–</b>séries</div>
         <div class="stat"><b id="nWith">–</b>avec thème</div>
         <div class="stat"><b id="nWithout">–</b>sans thème</div>
+        <div class="stat"><b id="nSeasons">–</b>saisons sans thème</div>
+        <label class="check"><input type="checkbox" id="batchSeasons" checked> avec les saisons</label>
         <button class="btn" id="batchStart">⚡ Télécharger tous les thèmes manquants</button>
         <button class="btn danger" id="batchStop" style="display:none">■ Arrêter</button>
         <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
@@ -104,7 +113,8 @@
             <div class="filters">
                 <input type="text" id="filterText" placeholder="Filtrer…" autocomplete="off">
                 <select id="filterState">
-                    <option value="missing">Sans thème</option>
+                    <option value="missing">Série sans thème</option>
+                    <option value="seasons">Saison sans thème</option>
                     <option value="all">Toutes</option>
                     <option value="done">Avec thème</option>
                 </select>
@@ -158,47 +168,82 @@ async function loadLibrary(keepSelection) {
     else note($('globalNote'), '');
     const w = items.filter(i => i.has_theme).length;
     $('nTotal').textContent = items.length; $('nWith').textContent = w; $('nWithout').textContent = items.length - w;
+    $('nSeasons').textContent = items.reduce((n, i) => n + (i.seasons || []).filter(x => !x.has_theme && x.number > 0).length, 0);
     renderList();
-    if (keepSelection && selected) { const cur = items.find(i => i.id === selected.id); if (cur) { selected = cur; refreshCurrent(); } }
+    if (keepSelection && selected) {
+        const cur = items.find(i => i.id === selected.id);
+        if (cur) { selected = cur; target = targetsOf(cur).find(t => t.id === (target && target.id)) || targetsOf(cur)[0]; if ($('targets')) { renderTargets(); refreshCurrent(); } }
+    }
 }
 
 function renderList() {
     const q = $('filterText').value.trim().toLowerCase(), st = $('filterState').value;
-    const rows = items.filter(i => (st === 'all' || (st === 'done') === i.has_theme) && (!q || i.name.toLowerCase().includes(q)));
+    const keep = i => st === 'all' ? true : st === 'done' ? i.has_theme : st === 'seasons' ? (i.seasons || []).some(x => !x.has_theme && x.number > 0) : !i.has_theme;
+    const rows = items.filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
     $('list').innerHTML = rows.length ? rows.map(i =>
         `<div class="row${selected && selected.id === i.id ? ' active' : ''}" data-id="${esc(i.id)}">
             <div class="name">${esc(i.title || i.name)}</div>
+            ${(i.seasons || []).length ? `<span class="pill">${i.seasons.filter(x => x.has_theme).length}/${i.seasons.length} saisons</span>` : ''}
             <span class="pill${i.has_theme ? ' ok' : ''}">${i.has_theme ? '🎵 thème' : 'sans thème'}</span></div>`).join('')
         : '<div class="empty">Aucune série.</div>';
     document.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => select(r.dataset.id)));
 }
 
 // ---------- détail ----------
+let target = null;   // ce qu'on traite : la série elle-même ou l'une de ses saisons
+function targetsOf(item) {
+    return [{id: item.id, label: 'Série', number: null, has_theme: item.has_theme}].concat((item.seasons || []).map(x =>
+        ({id: x.id, label: x.number === 0 ? 'Spéciaux' : 'Saison ' + x.number, number: x.number, has_theme: x.has_theme})));
+}
+function defaultQuery() {
+    const base = selected.title || selected.name;
+    return target && target.number > 1 ? base + ' Season ' + target.number : base;
+}
+
 function select(id) {
     selected = items.find(i => i.id === id); if (!selected) return;
-    renderList();
+    target = targetsOf(selected)[0];
+    renderList(); renderDetail();
+}
+
+function renderDetail() {
     $('detail').innerHTML = `
         <h2>${esc(selected.title || selected.name)}</h2>
         <div class="path">${esc(selected.name)}</div>
+        <div class="targets" id="targets"></div>
         <div id="current"></div>
         <div class="search-row">
-            <input type="text" id="q" value="${esc(selected.title || selected.name)}" autocomplete="off">
+            <input type="text" id="q" value="${esc(defaultQuery())}" autocomplete="off">
             <button class="btn" id="btnSearch">🔍 Chercher</button>
             <button class="btn ghost" id="btnAuto">⚡ Automatique</button>
         </div>
         <div id="msg"></div>
         <div id="cands"></div>`;
-    refreshCurrent();
+    renderTargets(); refreshCurrent();
     $('btnSearch').addEventListener('click', search);
     $('btnAuto').addEventListener('click', auto);
     $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
-    if (!selected.has_theme) search();
+    if (!target.has_theme) search();
+}
+
+function renderTargets() {
+    const list = targetsOf(selected);
+    $('targets').style.display = list.length > 1 ? '' : 'none';
+    $('targets').innerHTML = list.map(t => `<button type="button" class="chip${t.id === target.id ? ' active' : ''}" data-id="${esc(t.id)}">${esc(t.label)}${t.has_theme ? '<span class="tick">🎵</span>' : ''}</button>`).join('');
+    document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => switchTarget(c.dataset.id)));
+}
+
+function switchTarget(id) {
+    target = targetsOf(selected).find(t => t.id === id) || target;
+    $('q').value = defaultQuery(); $('cands').innerHTML = ''; note($('msg'), '');
+    renderTargets(); refreshCurrent();
+    if (!target.has_theme) search();
 }
 
 function refreshCurrent() {
     if (!selected || !$('current')) return;
-    $('current').innerHTML = selected.has_theme
-        ? `<div class="current">Thème actuel<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(selected.id)}&t=${Date.now()}"></audio></div>` : '';
+    $('current').innerHTML = target.has_theme
+        ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio></div>` : '';
 }
 
 async function search() {
@@ -218,7 +263,7 @@ async function search() {
     document.querySelectorAll('#cands button[data-a]').forEach(b => b.addEventListener('click', async () => {
         const t = res[b.dataset.a].themes[b.dataset.t];
         b.disabled = true; b.textContent = '…';
-        const r = await post('/api/save', {id: selected.id, url: t.audio || t.video, title: selected.title});
+        const r = await post('/api/save', {id: target.id, url: t.audio || t.video, title: selected.title});
         b.disabled = false; b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
         if (!r.error) loadLibrary(true);
@@ -227,7 +272,7 @@ async function search() {
 
 async function auto() {
     const b = $('btnAuto'); b.disabled = true; note($('msg'), '');
-    const r = await post('/api/auto', {id: selected.id, title: $('q').value.trim()});
+    const r = await post('/api/auto', {id: target.id, title: $('q').value.trim()});
     b.disabled = false;
     note($('msg'), r.message || r.error, r.ok ? 'ok' : 'warn');
     if (r.ok) loadLibrary(true);
@@ -246,8 +291,9 @@ async function pollBatch() {
     else if (pollTimer) { pollTimer = null; loadLibrary(true); }
 }
 $('batchStart').addEventListener('click', async () => {
-    if (!confirm('Chercher et télécharger automatiquement le thème de toutes les séries qui n\'en ont pas ?')) return;
-    const r = await post('/api/batch/start', {}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+    const withSeasons = $('batchSeasons').checked;
+    if (!confirm('Chercher et télécharger automatiquement les thèmes manquants (' + (withSeasons ? 'séries et saisons' : 'séries seulement') + ') ?')) return;
+    const r = await post('/api/batch/start', {seasons: withSeasons}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
 });
 $('batchStop').addEventListener('click', async () => { await post('/api/batch/stop'); });
 

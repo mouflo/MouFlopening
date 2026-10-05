@@ -98,6 +98,7 @@ def build_report(version, roots, emby_state, batch_state):
         "",
         "--- Réglages ---",
         f"Emby : {emby_state}",
+        f"Niveau des thèmes : {__import__('os').getenv('_TARGET_DB', '89')} dB (ReplayGain / MP3Gain)",
     ]
     for r in roots:
         p = Path(r)
