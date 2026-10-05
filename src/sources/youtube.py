@@ -152,14 +152,14 @@ class YouTubeSource(BaseSource):
 
     # ------------------------------------------------------------------ téléchargement
 
-    def _yt_download(self, url: str, tmp: str, clients=None) -> str:
+    def _yt_download(self, url: str, tmp: str, clients=None, max_duration=None) -> str:
         """Télécharge l'audio dans tmp ; retourne « » si OK, sinon le message d'erreur.
         clients : autres « profils » de lecteur YouTube à essayer quand le profil par défaut est refusé."""
         try:
             import yt_dlp
             opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
                     "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
-                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {self.max_duration}")}
+                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {max_duration or self.max_duration}")}
             def hook(d):
                 if d.get("status") == "downloading":
                     tot = d.get("total_bytes") or d.get("total_bytes_estimate")
@@ -178,7 +178,18 @@ class YouTubeSource(BaseSource):
         except Exception as e:
             return str(e)
 
-    def download(self, url: str, output_path: Path) -> bool:
+    def _probe_duration(self, url: str) -> int:
+        """Durée de la vidéo en secondes (0 si inconnue) : sert à expliquer un refus « trop longue »."""
+        try:
+            import yt_dlp
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout}) as ydl:
+                return int((ydl.extract_info(url, download=False) or {}).get("duration") or 0)
+        except Exception:
+            return 0
+
+    def download(self, url: str, output_path: Path, trusted: bool = False) -> bool:
+        """trusted : vidéo choisie par la communauté (ThemerrDB) — on accepte une durée plus longue (25 min au lieu de 10)."""
+        md = max(self.max_duration, 1500) if trusted else self.max_duration
         if not self.is_allowed_url(url):
             return False
         output_path = Path(output_path)
@@ -187,16 +198,16 @@ class YouTubeSource(BaseSource):
         logger.info("[YouTube] Téléchargement : %s", url)
         say("Connexion à YouTube…")
         with tempfile.TemporaryDirectory() as tmp:
-            err = self._yt_download(url, tmp, self._good_clients)       # le profil qui a marché la dernière fois d'abord
+            err = self._yt_download(url, tmp, self._good_clients, md)       # le profil qui a marché la dernière fois d'abord
             if err and _looks_outdated(err):
                 say("YouTube a refusé : mise à jour de yt-dlp…")
                 if _upgrade_ytdlp():
-                    err = self._yt_download(url, tmp)      # avec la version à jour
+                    err = self._yt_download(url, tmp, None, md)      # avec la version à jour
                 if err and _looks_outdated(err):           # YouTube refuse parfois un profil de lecteur mais pas les autres
                     for clients in (("tv", "web_safari"), ("mweb", "ios"), ("web_embedded", "android")):
                         logger.info("[YouTube] Nouvel essai avec le profil %s", "+".join(clients))
                         say(f"YouTube a refusé : nouvel essai avec un autre profil ({'+'.join(clients)})…")
-                        err = self._yt_download(url, tmp, clients)
+                        err = self._yt_download(url, tmp, clients, md)
                         if not err:
                             YouTubeSource._good_clients = clients      # on s'en souvient pour les prochains téléchargements
                             break
@@ -212,8 +223,13 @@ class YouTubeSource(BaseSource):
                 return False
             files = sorted(Path(tmp).glob("source.*"))
             if not files:
-                logger.error("[YouTube] Aucun fichier reçu (vidéo trop longue ou refusée)")
-                self.last_error = "vidéo trop longue ou refusée : choisis-en une autre"
+                dur = self._probe_duration(url)
+                if dur and dur > md:
+                    logger.error("[YouTube] Vidéo de %d min, limite %d min", dur // 60, md // 60)
+                    self.last_error = f"vidéo de {dur // 60} min : trop longue pour un thème (limite {md // 60} min)"
+                else:
+                    logger.error("[YouTube] Aucun fichier reçu (durée %s s)", dur or "inconnue")
+                    self.last_error = "YouTube n'a fourni aucun fichier pour cette vidéo : choisis-en une autre"
                 return False
             say("Conversion en MP3 et réglage du volume (89 dB)…")
             out = Path(tmp) / "theme.mp3"
@@ -237,6 +253,8 @@ def _friendly(err: str) -> str:
         return "YouTube refuse ce téléchargement depuis le serveur (la vidéo marche peut-être dans ton navigateur) : réessaie dans quelques minutes ou choisis-en une autre"
     if "sign in" in e or "age" in e and "restrict" in e:
         return "YouTube demande une connexion pour cette vidéo : choisis-en une autre"
+    if "claimed content" in e or "blocked" in e or "copyright" in e:
+        return "YouTube bloque cette vidéo (droits d'auteur / pays) : impossible de la télécharger, cherche une autre version à la main"
     if "403" in e or "forbidden" in e:
         return "YouTube a refusé le téléchargement (403) : réessaie dans quelques minutes"
     if "duration" in e or "does not pass filter" in e:

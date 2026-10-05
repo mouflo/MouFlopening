@@ -433,7 +433,7 @@ async function search(full) {
         const t = res[b.dataset.a].themes[b.dataset.t];
         b.disabled = true; b.textContent = '…';
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = true);
-        const r = await runJob('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title},
+        const r = await runJob('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title, trusted: String(res[b.dataset.a].name).startsWith('★')},
             (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); });
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = false);
         b.textContent = 'Utiliser';

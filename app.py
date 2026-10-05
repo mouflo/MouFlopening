@@ -174,7 +174,7 @@ def _backup_existing(folder):
             logger.info("Ancien thème mis de côté : %s", dest / name)
 
 
-def _download_replace(source, url, folder):
+def _download_replace(source, url, folder, trusted=False):
     """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)"""
     tmp = folder / "theme.nouveau.partiel"
     progress.say("Téléchargement du thème…")
@@ -182,7 +182,7 @@ def _download_replace(source, url, folder):
         tmp.unlink()
     except OSError:
         pass
-    if not source.download(url, tmp):
+    if not (source.download(url, tmp, trusted=True) if trusted and hasattr(source, "_probe_duration") else source.download(url, tmp)):
         try:
             tmp.unlink()
         except OSError:
@@ -354,7 +354,7 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
                     result = source.search(alt, mtype)
             if not result:
                 return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
-        ok, why = _download_replace(source, result.url, folder)
+        ok, why = _download_replace(source, result.url, folder, trusted=(kind != "anime"))   # films/séries : vidéo choisie par ThemerrDB
         if not ok:
             return False, why
     emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
@@ -562,7 +562,7 @@ def _save_work(data):
     if _work_lock.locked():
         progress.say("En attente : un autre traitement est en cours…")
     with _work_lock:
-        ok, why = _download_replace(source, url, folder)
+        ok, why = _download_replace(source, url, folder, trusted=bool(data.get("trusted")))
         if not ok:
             return {"error": "Thème non enregistré : " + why + ". L'ancien thème (s'il y en avait un) est conservé."}, 502
         progress.say("Mise à jour d'Emby…")

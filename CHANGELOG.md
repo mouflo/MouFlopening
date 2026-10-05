@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.16.3] - 2026-10-05
+
+### Amélioré
+- Les thèmes choisis par la communauté (ThemerrDB) peuvent maintenant durer jusqu'à 25 minutes (limite de 10 minutes pour les autres vidéos YouTube) : plusieurs étaient refusés « trop longue » à tort
+- Les refus de YouTube sont expliqués précisément : durée réelle de la vidéo quand elle est trop longue, ou « YouTube bloque cette vidéo (droits d'auteur / pays) » quand le titre est bloqué pour cause de contenu protégé (cas de Man of Steel)
+
 ## [0.16.2] - 2026-10-05
 
 ### Corrigé
