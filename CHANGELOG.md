@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.1] - 2026-10-05
+
+### Corrigé
+- Les listes s'adaptent à l'onglet : « Film sans thème / Tous / Avec thème » pour les films (plus de choix « saison »), « Anime sans thème » pour les animes, « Série sans thème » pour les séries ; le compteur indique « animes », « séries » ou « films »
+
 ## [0.7.0] - 2026-10-05
 
 ### Ajouté

@@ -130,17 +130,14 @@
             <div class="filters">
                 <input type="text" id="filterText" placeholder="Filtrer…" autocomplete="off">
                 <select id="filterState">
-                    <option value="missing">Série sans thème</option>
-                    <option value="seasons">Saison sans thème</option>
-                    <option value="all">Toutes</option>
-                    <option value="done">Avec thème</option>
+                    <option value="missing">Sans thème</option>
                 </select>
             </div>
             <div class="list" id="list"><div class="empty">Chargement…</div></div>
         </div>
 
         <div class="panel detail" id="detail">
-            <div class="empty">Choisis une série dans la liste.</div>
+            <div class="empty">Choisis un titre dans la liste.</div>
         </div>
     </div>
 </div>
@@ -179,7 +176,8 @@ async function loadLibrary(keepSelection) {
     else note($('globalNote'), '');
     const mine = catItems(), movie = catKind() === 'movie';
     const w = mine.filter(i => i.has_theme).length;
-    $('lblItems').textContent = movie ? 'films' : 'séries';
+    $('lblItems').textContent = movie ? 'films' : catKind() === 'anime' ? 'animes' : 'séries';
+    fillFilter();
     $('statSeasons').style.display = movie ? 'none' : ''; $('batchSeasons').parentElement.style.display = movie ? 'none' : '';
     $('nTotal').textContent = mine.length; $('nWith').textContent = w; $('nWithout').textContent = mine.length - w;
     $('nSeasons').textContent = mine.reduce((n, i) => n + (i.seasons || []).filter(x => !x.has_theme && x.number > 0).length, 0);
@@ -188,6 +186,17 @@ async function loadLibrary(keepSelection) {
         const cur = items.find(i => i.id === selected.id);
         if (cur) { selected = cur; target = targetsOf(cur).find(t => t.id === (target && target.id)) || targetsOf(cur)[0]; if ($('targets')) { renderTargets(); refreshCurrent(); } }
     }
+}
+
+// Les choix du filtre dépendent de l'onglet : pas de « saison » pour un film
+function fillFilter() {
+    const kind = catKind(), sel = $('filterState'), before = sel.value;
+    const word = kind === 'movie' ? 'Film' : kind === 'anime' ? 'Anime' : 'Série';
+    const opts = [['missing', word + ' sans thème']];
+    if (kind !== 'movie') opts.push(['seasons', 'Saison sans thème']);
+    opts.push(['all', kind === 'movie' ? 'Tous' : 'Toutes'], ['done', 'Avec thème']);
+    sel.innerHTML = opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('');
+    sel.value = opts.some(o => o[0] === before) ? before : 'missing';
 }
 
 function renderTabs() {
