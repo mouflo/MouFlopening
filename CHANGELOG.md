@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.15.1] - 2026-10-05
+
+### Amélioré
+- Le détail du traitement en lot (téléchargement ou normalisation) est maintenant une petite fenêtre de 4-5 lignes, toujours visible sous la barre de progression, qui défile toute seule : la ligne en cours (⏳) est en bas, en gras, et les précédentes remontent. Plus besoin de l'ouvrir ni de défiler la page. Elle reste collée en haut de l'écran quand on descend dans la page, et un bouton « Tout voir » l'agrandit pour relire tout l'historique
+
 ## [0.15.0] - 2026-10-05
 
 ### Ajouté

@@ -217,7 +217,7 @@ _batch_lock = threading.Lock()
 def _batch_note(text):
     logger.info("[lot] %s", text)
     with _batch_lock:
-        BATCH["messages"] = (BATCH["messages"] + [text])[-40:]
+        BATCH["messages"] = (BATCH["messages"] + [text])[-200:]
 
 
 def _batch_state_text():

@@ -103,7 +103,12 @@
     .cands.collapsed .cand.chosen { border:1px solid var(--accent); cursor:pointer; }
     .cands.collapsed .cand.chosen h4::after { content:"  ▾ changer"; color:var(--muted); font-size:.8rem; font-weight:400; }
     .hint { color:var(--muted); font-size:.85rem; margin:0 0 10px; }
-    .batchlog { margin-bottom:16px; padding:10px 14px; }
+    .livelog { margin-bottom:16px; padding:8px 14px 10px; position:sticky; top:0; z-index:5; box-shadow:0 6px 14px rgba(0,0,0,.45); }
+    .livehead { display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:.85rem; margin-bottom:6px; }
+    .livewin { height:7.8em; overflow-y:auto; font:12px/1.55 ui-monospace,Menlo,Consolas,monospace; color:#9a9a9a; scroll-behavior:smooth; }
+    .livewin.big { height:60vh; }
+    .livewin div { white-space:pre-wrap; word-break:break-word; }
+    .livewin div:last-child { color:#fff; font-weight:600; }
     .batchlog summary { cursor:pointer; color:var(--muted); font-size:.9rem; }
     .batchlog pre { margin:10px 0 0; white-space:pre-wrap; word-break:break-word; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; color:#d6d6d6; max-height:40vh; overflow:auto; }
         .opt { display:flex; align-items:center; gap:8px; margin:8px 0 0; font-size:.9em; color:var(--muted,#aaa); cursor:pointer; }
@@ -129,7 +134,10 @@
         <button class="btn danger" id="batchStop" style="display:none">■ Arrêter</button>
         <div class="progress" id="progress"><div class="bar" id="bar"></div><div class="txt" id="progTxt"></div></div>
     </div>
-    <details class="panel batchlog" id="batchLogBox" style="display:none"><summary>Détail du dernier traitement</summary><pre id="batchLogTxt"></pre></details>
+    <div class="panel livelog" id="batchLogBox" style="display:none">
+        <div class="livehead"><span id="liveTitle">Dernier traitement</span><button type="button" class="btn ghost small" id="liveMore">Tout voir</button></div>
+        <div class="livewin" id="batchLogTxt"></div>
+    </div>
     <div id="globalNote"></div>
 
     <div class="layout">
@@ -451,7 +459,14 @@ async function pollBatch() {
     const norm = s.kind === 'normalize';
     $('progTxt').textContent = s.running ? `${norm ? '🔊 ' : ''}${n}/${s.total} · ${s.current || ''}` : (s.total ? (norm ? `Terminé : ${s.done} thème(s) vérifié(s), ${s.failed} en erreur` : `Terminé : ${s.done} ajouté(s), ${s.failed} introuvable(s)`) : '');
     $('batchStart').style.display = s.running ? 'none' : ''; $('normStart').style.display = s.running ? 'none' : ''; $('batchStop').style.display = s.running ? '' : 'none';
-    $('batchLogBox').style.display = (s.messages || []).length ? '' : 'none'; $('batchLogTxt').textContent = (s.messages || []).join('\n');
+    const msgs = (s.messages || []).concat(s.running && s.current ? ['⏳ ' + s.current + '…'] : []), win = $('batchLogTxt');
+    $('batchLogBox').style.display = msgs.length ? '' : 'none';
+    $('liveTitle').textContent = s.running ? (norm ? 'Normalisation en cours…' : 'Téléchargement en cours…') : 'Dernier traitement';
+    if (win.dataset.n !== msgs.join('|').length + ':' + msgs.length) {     // on ne redessine que s'il y a du nouveau ; on suit la dernière ligne sauf si on a remonté la fenêtre à la main
+        const atEnd = win.scrollHeight - win.scrollTop - win.clientHeight < 40;
+        win.innerHTML = msgs.map(m => `<div>${esc(m)}</div>`).join(''); win.dataset.n = msgs.join('|').length + ':' + msgs.length;
+        if (atEnd || !win.dataset.seen) { win.scrollTop = win.scrollHeight; win.dataset.seen = '1'; }
+    }
     if (s.running) { clearTimeout(pollTimer); pollTimer = setTimeout(pollBatch, 2000); loadLibrary(true); }
     else if (pollTimer) { pollTimer = null; loadLibrary(true); }
 }
@@ -465,6 +480,10 @@ $('batchStart').addEventListener('click', async () => {
 $('normStart').addEventListener('click', async () => {
     if (!confirm('Ramener tous les thèmes MP3 déjà présents au même niveau ? Les originaux sont conservés (dossier data/themes-backup sur le serveur). Les thèmes déjà au bon niveau ne sont pas touchés.')) return;
     const r = await post('/api/normalize/start', {}); if (r.error) note($('globalNote'), r.error, 'err'); pollBatch();
+});
+$('liveMore').addEventListener('click', () => {
+    const w = $('batchLogTxt'), big = w.classList.toggle('big');
+    $('liveMore').textContent = big ? 'Réduire' : 'Tout voir'; w.scrollTop = w.scrollHeight;
 });
 $('batchStop').addEventListener('click', async () => { await post('/api/batch/stop'); });
 
