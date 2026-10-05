@@ -178,7 +178,7 @@ def _backup_existing(folder):
 SOURCES_FILE = BASE_DIR / "data" / "theme_sources.json"
 
 
-def _download_replace(source, url, folder, trusted=False, forbid_same_as=None):
+def _download_replace(source, url, folder, trusted=False, forbid_same_as=None, any_url=False):
     """Télécharge d'abord à côté ; l'ancien thème n'est mis de côté qu'une fois le nouveau bien reçu. -> (succès, raison)
     forbid_same_as : (dossier de la série) : refuse un thème identique à celui de la série ou d'une autre saison."""
     tmp = folder / "theme.nouveau.partiel"
@@ -187,7 +187,11 @@ def _download_replace(source, url, folder, trusted=False, forbid_same_as=None):
         tmp.unlink()
     except OSError:
         pass
-    if not (source.download(url, tmp, trusted=True) if trusted and hasattr(source, "_probe_duration") else source.download(url, tmp)):
+    if any_url:
+        done = source.download(url, tmp, trusted=True, any_url=True)
+    else:
+        done = source.download(url, tmp, trusted=True) if trusted and hasattr(source, "_probe_duration") else source.download(url, tmp)
+    if not done:
         try:
             tmp.unlink()
         except OSError:
@@ -651,7 +655,7 @@ def _custom_url_work(data):
     if _work_lock.locked():
         progress.say("En attente : un autre traitement est en cours…")
     with _work_lock:
-        ok, why = _download_replace(YOUTUBE, url, folder, trusted=True)
+        ok, why = _download_replace(YOUTUBE, YOUTUBE.canonical_url(url), folder, trusted=True, any_url=True)
         if not ok:
             return {"error": "Thème non enregistré : " + why + ". L'ancien thème (s'il y en avait un) est conservé."}, 502
         progress.say("Mise à jour d'Emby…")

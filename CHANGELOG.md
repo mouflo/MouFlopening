@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.23.4] - 2026-10-05
+
+### Corrigé
+- Thème personnalisé par lien : les liens YouTube courts ou avec des options (youtu.be, &t=, &list=, m.youtube, shorts) étaient refusés sans explication (« téléchargement ou conversion impossible », rien dans le Journal). Ils sont maintenant reconnus, les autres sites publics sont essayés, et un lien refusé est expliqué et écrit dans le Journal
+
 ## [0.23.3] - 2026-10-05
 
 ### Amélioré

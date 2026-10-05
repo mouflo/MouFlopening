@@ -151,6 +151,27 @@ class YouTubeSource(BaseSource):
     def is_allowed_url(url: str) -> bool:
         return bool(_URL_RE.match(url or ""))
 
+    @staticmethod
+    def canonical_url(url: str) -> str:
+        """Lien YouTube sous toutes ses formes (youtu.be, shorts, m., music., &t=, &list=…) -> https://youtube.com/watch?v=ID. Autre lien : inchangé."""
+        from urllib.parse import urlparse, parse_qs
+        try:
+            u = urlparse((url or "").strip())
+            host = (u.hostname or "").lower()
+            vid = ""
+            if host == "youtu.be":
+                vid = u.path.strip("/").split("/")[0]
+            elif host == "youtube.com" or host.endswith(".youtube.com"):
+                if u.path.startswith(("/shorts/", "/embed/", "/live/")):
+                    vid = u.path.split("/")[2]
+                else:
+                    vid = (parse_qs(u.query).get("v") or [""])[0]
+            if re.fullmatch(r"[\w-]{11}", vid or ""):
+                return watch_url(vid)
+        except (ValueError, IndexError):
+            pass
+        return (url or "").strip()
+
     # ------------------------------------------------------------------ téléchargement
 
     def _yt_download(self, url: str, tmp: str, clients=None, max_duration=None) -> str:
@@ -188,10 +209,13 @@ class YouTubeSource(BaseSource):
         except Exception:
             return 0
 
-    def download(self, url: str, output_path: Path, trusted: bool = False) -> bool:
+    def download(self, url: str, output_path: Path, trusted: bool = False, any_url: bool = False) -> bool:
         """trusted : vidéo choisie par la communauté (ThemerrDB) — on accepte une durée plus longue (25 min au lieu de 10)."""
         md = max(self.max_duration, 1500) if trusted else self.max_duration
-        if not self.is_allowed_url(url):
+        self.last_error = ""
+        if not any_url and not self.is_allowed_url(url):
+            logger.error("[YouTube] Lien refusé : %s", url)
+            self.last_error = "lien non reconnu (colle un lien YouTube de type youtube.com/watch?v=…)"
             return False
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
