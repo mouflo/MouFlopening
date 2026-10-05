@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0] - 2026-10-05
+
+### Amélioré
+- Recherche YouTube beaucoup plus large, comme une recherche à la main : six formulations lancées en parallèle (« <titre> theme », « main theme », « soundtrack », « OST », « bande originale »… ; pour une série : « theme song », « intro », « générique »…), résultats fusionnés sans doublon et classés, jusqu'à 10 propositions par titre (12 avec le titre original)
+- Recherche plus rapide : liste légère (titre, durée, chaîne) au lieu de l'analyse complète de chaque vidéo
+
 ## [0.7.3] - 2026-10-05
 
 ### Corrigé

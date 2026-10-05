@@ -42,13 +42,16 @@ class YouTubeSource(BaseSource):
     # ------------------------------------------------------------------ recherche
 
     @staticmethod
-    def _keyword(media_type: str) -> str:
-        return "main theme soundtrack" if media_type == "movie" else "tv series theme song"
+    def _keywords(media_type: str) -> List[str]:
+        """Plusieurs formulations : comme à la main (« die hard 2 theme »), une seule ne suffit pas"""
+        if media_type == "movie":
+            return ["theme", "main theme", "soundtrack", "OST", "bande originale", "main title"]
+        return ["theme", "theme song", "intro", "opening", "générique", "soundtrack"]
 
     def _ydl(self):
         import yt_dlp   # importé à la demande : l'appli démarre même si le module manque
         return yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "socket_timeout": self.timeout,
-                                 "noplaylist": True, "skip_download": True, "extract_flat": False})
+                                 "noplaylist": True, "skip_download": True, "extract_flat": "in_playlist"})   # liste rapide (titre, durée, chaîne)
 
     def _raw_search(self, query: str, count: int) -> List[Dict[str, Any]]:
         try:
@@ -73,10 +76,19 @@ class YouTubeSource(BaseSource):
             score += 15
         return score
 
-    def candidates(self, title: str, media_type: str = "series", limit: int = 6) -> List[Dict[str, Any]]:
+    def candidates(self, title: str, media_type: str = "series", limit: int = 10) -> List[Dict[str, Any]]:
         """Résultats classés ; même forme que AnimeThemes (un « groupe » par vidéo, avec un lecteur YouTube)."""
-        entries = [e for e in self._raw_search(f"{title} {self._keyword(media_type)}", 8)
-                   if _ID_RE.match(str(e.get("id", "")))]
+        from concurrent.futures import ThreadPoolExecutor
+        queries = [f"{title} {k}" for k in self._keywords(media_type)]
+        with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+            batches = list(pool.map(lambda q: self._raw_search(q, 8), queries))
+        seen, entries = set(), []
+        for batch in batches:                      # sans doublon, en gardant l'ordre de pertinence de YouTube
+            for e in batch:
+                vid = str(e.get("id", ""))
+                if _ID_RE.match(vid) and vid not in seen:
+                    seen.add(vid)
+                    entries.append(e)
         entries.sort(key=lambda e: -self._score(title, e))
         out = []
         for e in entries[:limit]:

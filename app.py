@@ -363,7 +363,7 @@ def api_search():
             seen.add(key)
             results.append(r)
     results.sort(key=lambda r: -int(r.get("score") or 0))
-    return jsonify({"results": results[:8], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles})
+    return jsonify({"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles})
 
 
 @app.route("/api/save", methods=["POST"])
