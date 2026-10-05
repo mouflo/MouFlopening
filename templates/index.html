@@ -403,7 +403,7 @@ async function startEdit(kind, arg) {
     if (kind === 'file') { const form = new FormData(); form.append('file', arg); form.append('id', tgt.id); r = await runJob('/api/edit/stage-file', form, progress); }
     else r = await runJob('/api/edit/stage', {id: tgt.id, source: kind, url: arg || ''}, progress);
     if (r.error) return note($('msg'), r.error, 'err');
-    if (target !== tgt) return;                         // on a changé de titre pendant la préparation
+    if (!target || target.id !== tgt.id) return;        // on a changé de titre pendant la préparation
     note($('msg'), ''); stopPlayers(null);
     MouEditor.open({token: r.token, name: r.name, id: tgt.id, title: sel.title,
         onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; loadLibrary(true); }});
@@ -468,7 +468,7 @@ async function search(full) {
     $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), ''); ensureVisible($('cands'));
     const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn, full: full === true, exclude: [...blockedVideos]},
         (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (!done) ensureVisible($('cands')); });
-    if (data.cancelled || target !== tgt || selected !== sel) return;      // on est passé à un autre titre : résultats ignorés
+    if (data.cancelled || !target || target.id !== tgt.id) return;      // on est passé à un autre titre : résultats ignorés (la liste peut être relue entre-temps : on compare l'identifiant)
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) {

@@ -43,6 +43,7 @@ class AnimeThemesSource(BaseSource):
 
     def search(self, title: str, media_type: str = "auto") -> Optional[ThemeResult]:
         """Cherche le meilleur générique pour un titre d'anime."""
+        self.api_error = False
         if media_type in ("movie", "tv"):
             # AnimeThemes ne contient que des animes ; on laisse les autres sources s'en charger
             logger.debug("[AnimeThemes] type %s ignoré", media_type)

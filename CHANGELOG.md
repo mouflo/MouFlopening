@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.25.1] - 2026-10-06
+
+### Corrigé
+- Pendant un lot, une recherche manuelle ou l'ouverture de l'éditeur pouvaient ne rien afficher (la liste relue entre-temps faisait croire à un changement de titre)
+- Seules les vraies pannes passagères (réseau, écriture, YouTube qui demande de réessayer) évitent la mise de côté ; une vidéo trop longue ou bloquée reste un échec définitif
+
 ## [0.25.0] - 2026-10-05
 
 ### Corrigé (audit complet)

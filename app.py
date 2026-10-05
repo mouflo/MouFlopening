@@ -438,7 +438,8 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
         ok, why = _download_replace(source, result.url, folder, trusted=(kind != "anime"),
                                     forbid_same_as=series if (kind == "anime" and number is not None) else None)   # films/séries : vidéo choisie par ThemerrDB
         if not ok:
-            return False, why if why.startswith("même thème") else TRANSIENT + why    # échec de téléchargement : on retentera
+            passing = any(k in why for k in ("réessaie", "écriture impossible", "injoignable", "conversion impossible", "403"))
+            return False, (TRANSIENT + why) if passing else why     # panne passagère : on retentera ; vidéo trop longue, bloquée… : non
     emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
     return True, f"{result.title} · {emby['message']}"
 
