@@ -145,48 +145,58 @@ def resolve_target(roots: List[str], item_id: str) -> Tuple[Optional[Path], Opti
 
 
 # ---------------------------------------------------------------------------
-# Catégories (onglets) : Anime, Séries, Films…
+# Onglets : Animes, Séries, Films (les dossiers du même type sont regroupés, ex. Films HD + Films 4K)
 # ---------------------------------------------------------------------------
 KINDS = ("anime", "series", "movie")
-_KIND_WORDS = (("anime", ("manga", "anime", "animé", "anim", "cartoon", "dessin")),
-               ("movie", ("film", "movie", "cinema", "cinéma")))
+DEFAULT_NAMES = {"anime": "Animes", "series": "Séries", "movie": "Films"}
+_KIND_RE = (("anime", re.compile(r"manga|anime|animé|cartoon|dessin", re.I)),
+            ("movie", re.compile(r"film|movie|cinema|cinéma|(?<![a-z0-9])(4k|uhd|hd)(?![a-z0-9])", re.I)),
+            ("series", re.compile(r"s[ée]rie|(?<![a-z0-9])(tv|show|shows)(?![a-z0-9])", re.I)))
 
 
-def guess_kind(name: str) -> str:
-    """Type de médiathèque d'après le nom du dossier : Manga/Anime -> anime, Films -> movie, sinon séries."""
-    low = name.lower()
-    for kind, words in _KIND_WORDS:
-        if any(w in low for w in words):
+def guess_kind(name: str) -> Optional[str]:
+    """Type d'après le nom du dossier : Manga/Anime -> anime, Films/HD/4K -> movie, Séries/TV -> series, sinon None (ignoré)."""
+    for kind, rx in _KIND_RE:
+        if rx.search(name):
             return kind
-    return "series"
+    return None
 
 
-def discover_categories(cfg: dict) -> List[dict]:
+def discover_categories(cfg: dict, ignored: Optional[list] = None) -> List[dict]:
     """
-    Liste des onglets : [{"name", "path", "kind", "ok"}].
-    Sources : `library.categories` (nom, chemin, type) puis chaque sous-dossier de `library.auto_parent`
-    (le type est deviné d'après le nom), puis l'ancien réglage `library.paths`.
+    Les onglets : [{"name", "kind", "paths": [...], "ok"}], dans l'ordre Animes, Séries, Films.
+    Sources : `library.categories` (chemin ou chemins + type), puis chaque sous-dossier de `library.auto_parent`
+    dont le nom évoque un type connu (les autres sont ignorés et ajoutés à `ignored`), puis l'ancien `library.paths`.
     """
     lib = (cfg or {}).get("library", {})
-    cats, seen = [], set()
+    groups = {k: {"name": None, "paths": []} for k in KINDS}
+    seen = set()
 
-    def add(name, path, kind=None):
-        key = str(Path(path).resolve()) if path else ""
-        if not path or key in seen:
+    def add(kind, path, name=None):
+        if kind not in KINDS or not path:
+            return
+        key = str(Path(path).resolve())
+        if key in seen:
             return
         seen.add(key)
-        k = kind if kind in KINDS else guess_kind(name)
-        cats.append({"name": name, "path": str(path), "kind": k, "ok": Path(path).is_dir()})
+        groups[kind]["paths"].append(str(path))
+        groups[kind]["name"] = groups[kind]["name"] or name
 
     for c in lib.get("categories", []) or []:
-        if isinstance(c, dict) and c.get("path"):
-            add(c.get("name") or Path(c["path"]).name, c["path"], c.get("kind"))
+        if not isinstance(c, dict):
+            continue
+        for path in ([c["path"]] if c.get("path") else []) + list(c.get("paths") or []):
+            add(c.get("kind") or guess_kind(c.get("name") or Path(path).name), path, c.get("name"))
     parent = lib.get("auto_parent")
     if parent and Path(parent).is_dir():
         for sub in sorted(Path(parent).iterdir(), key=lambda f: f.name.lower()):
             if sub.is_dir() and sub.name not in IGNORED_DIRS and not sub.name.startswith((".", "@", "#")):
-                add(sub.name, str(sub))
+                kind = guess_kind(sub.name)
+                if kind:
+                    add(kind, str(sub))
+                elif ignored is not None:
+                    ignored.append(sub.name)
     for path in lib.get("paths", []) or []:
-        add(Path(path).name, path)
-    cats.sort(key=lambda c: KINDS.index(c["kind"]))   # anime, séries, films (tri stable)
-    return cats
+        add(guess_kind(Path(path).name) or "series", path)
+    return [{"name": g["name"] or DEFAULT_NAMES[k], "kind": k, "paths": g["paths"],
+             "ok": all(Path(p).is_dir() for p in g["paths"])} for k, g in groups.items() if g["paths"]]

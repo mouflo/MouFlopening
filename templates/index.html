@@ -257,6 +257,7 @@ function renderList() {
     $('list').innerHTML = rows.length ? rows.map(i =>
         `<div class="row${selected && selected.id === i.id ? ' active' : ''}" data-id="${esc(i.id)}">
             <div class="name">${esc(i.title || i.name)}</div>
+            ${(cats[curCat] || {}).multi ? `<span class="pill">${esc(i.origin)}</span>` : ''}
             ${(i.seasons || []).length ? `<span class="pill">${i.seasons.filter(x => x.has_theme).length}/${i.seasons.length} saisons</span>` : ''}
             <span class="pill${i.has_theme ? ' ok' : ''}">${i.has_theme ? '🎵 thème' : 'sans thème'}</span></div>`).join('')
         : '<div class="empty">Aucun titre dans cette médiathèque.</div>';

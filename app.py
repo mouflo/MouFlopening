@@ -46,8 +46,13 @@ def get_version():
 
 APP_VERSION = get_version()
 CONFIG = load_config()
-CATS = library.discover_categories(CONFIG)      # onglets : Anime, Séries, Films…
-ROOTS = [c["path"] for c in CATS]
+IGNORED_FOLDERS = []
+CATS = library.discover_categories(CONFIG, IGNORED_FOLDERS)   # onglets : Animes, Séries, Films (dossiers du même type regroupés)
+ROOTS, ROOT_CAT = [], []                                      # dossiers racine à plat, et l'onglet de chacun
+for _i, _c in enumerate(CATS):
+    for _p in _c["paths"]:
+        ROOTS.append(_p)
+        ROOT_CAT.append(_i)
 EMBY = EmbyClient(CONFIG.get("emby", {}))
 TARGET_DB = float(CONFIG.get("audio", {}).get("target_db", 89))   # niveau de chaque thème (référence ReplayGain / MP3Gain)
 SOURCE = AnimeThemesSource(CONFIG.get("sources", {}).get("animethemes", {"enabled": True}),
@@ -64,7 +69,7 @@ def source_for(kind):
 def kind_of(item_id):
     """Type (anime / series / movie) de l'onglet auquel appartient un identifiant « n/Dossier »."""
     try:
-        return CATS[int(str(item_id).split("/")[0])]["kind"]
+        return CATS[ROOT_CAT[int(str(item_id).split("/")[0])]]["kind"]
     except (ValueError, IndexError):
         return "anime"
 
@@ -80,7 +85,37 @@ auth.init_app(app, APP_VERSION)
 
 _work_lock = threading.Lock()   # un seul téléchargement/conversion à la fois (ménage le NAS et le CPU)
 
-BACKUP_DIR = BASE_DIR / "data" / "themes-backup"
+# Anciens thèmes mis de côté : sur le NAS (dossier MouFlopening), repli sur data/ si le partage n'est pas accessible
+OLD_BACKUP_DIR = BASE_DIR / "data" / "themes-backup"
+_BACKUP_CFG = Path(CONFIG.get("themes", {}).get("backup_dir") or "/mnt/mouflosyno/MouFlopening/Anciens thèmes")
+
+
+def _backup_dir():
+    try:
+        _BACKUP_CFG.mkdir(parents=True, exist_ok=True)
+        if os.access(_BACKUP_CFG, os.W_OK):
+            return _BACKUP_CFG
+    except OSError:
+        pass
+    logger.warning("Dossier de sauvegarde %s inaccessible (partage monté ?) : repli sur %s", _BACKUP_CFG, OLD_BACKUP_DIR)
+    return OLD_BACKUP_DIR
+
+
+def _migrate_old_backups():
+    """Une fois : les sauvegardes déjà faites dans data/themes-backup sont déplacées vers le NAS."""
+    if not OLD_BACKUP_DIR.is_dir() or not any(OLD_BACKUP_DIR.iterdir()):
+        return
+    dest = _backup_dir()
+    if dest == OLD_BACKUP_DIR:
+        return
+    for item in list(OLD_BACKUP_DIR.iterdir()):
+        try:
+            target = dest / item.name
+            if not target.exists():
+                shutil.move(str(item), str(target))
+                logger.info("Sauvegarde déplacée vers le NAS : %s", target)
+        except OSError as e:
+            logger.warning("Déplacement impossible (%s) : %s", item.name, e)
 NORMALIZED_FILE = BASE_DIR / "data" / "normalized.json"
 
 
@@ -93,10 +128,10 @@ def _backup_existing(folder):
     for ext in THEME_EXTS:
         old = folder / f"theme{ext}"
         if old.is_file():
-            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            dest = _backup_dir()
             name = f"{datetime.now():%Y%m%d-%H%M%S}_{_slug(folder.parent.name)}_{_slug(folder.name)}{ext}"
-            shutil.move(str(old), str(BACKUP_DIR / name))
-            logger.info("Ancien thème mis de côté : %s", BACKUP_DIR / name)
+            shutil.move(str(old), str(dest / name))
+            logger.info("Ancien thème mis de côté : %s", dest / name)
 
 
 def _read_registry():
@@ -136,7 +171,7 @@ def _batch_state_text():
 
 def _run_batch(limit, with_seasons, cat=0):
     kind = CATS[cat]["kind"]
-    roots = [CATS[cat]["path"]]
+    roots = list(CATS[cat]["paths"])
     todo = [("série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
     if with_seasons and kind != "movie":
         todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
@@ -177,11 +212,11 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
         _backup_existing(folder)
         if not source.download(result.url, folder / THEME_FILENAME):
             return False, "téléchargement ou conversion impossible (voir le Journal)"
-    emby = EMBY.refresh_series(series.name, title, number, kind)
+    emby = EMBY.refresh_series(series.name, title, number, kind, series.parent.name)
     return True, f"{result.title} · {emby['message']}"
 
 def _run_normalize():
-    """Ramène à TARGET_DB tous les theme.mp3 déjà présents (originaux copiés dans data/themes-backup/)."""
+    """Ramène à TARGET_DB tous les theme.mp3 déjà présents (originaux copiés dans le dossier des anciens thèmes)."""
     from src.audio import normalize_file
     files = []
     skipped_other = 0
@@ -195,7 +230,7 @@ def _run_normalize():
             else:
                 skipped_other += 1
     registry = _read_registry()
-    backup = BACKUP_DIR / "normalisation" / f"{datetime.now():%Y%m%d-%H%M%S}"
+    backup = _backup_dir() / "normalisation" / f"{datetime.now():%Y%m%d-%H%M%S}"
     with _batch_lock:
         BATCH.update(kind="normalize", running=True, stop=False, total=len(files), done=0, failed=0, current="", messages=[])
     _batch_note(f"{len(files)} thème(s) MP3 à vérifier (cible {TARGET_DB:g} dB)" + (f" · {skipped_other} autre(s) format(s) ignoré(s)" if skipped_other else ""))
@@ -255,8 +290,10 @@ def index():
 def api_library():
     items = library.list_library(ROOTS)
     for it in items:
-        it["cat"] = int(it["id"].split("/")[0])
-    cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": Path(c["path"]).is_dir()} for i, c in enumerate(CATS)]
+        root = int(it["id"].split("/")[0])
+        it["cat"] = ROOT_CAT[root]
+        it["origin"] = Path(ROOTS[root]).name      # dossier d'origine (utile quand un onglet regroupe Films HD et Films 4K)
+    cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": c["ok"], "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
     return jsonify({"items": items, "emby": EMBY.configured, "categories": cats})
 
 
@@ -266,7 +303,10 @@ def api_search():
     title = body.get("title", "").strip()
     if not title:
         return jsonify({"error": "Titre vide"}), 400
-    kind = kind_of(f"{body.get('cat', 0)}/")
+    try:
+        kind = CATS[int(body.get("cat", 0))]["kind"]
+    except (ValueError, IndexError):
+        kind = "anime"
     if kind == "anime":
         return jsonify({"results": SOURCE.candidates(title), "source": "AnimeThemes"})
     return jsonify({"results": YOUTUBE.candidates(title, "movie" if kind == "movie" else "series"), "source": "YouTube"})
@@ -288,7 +328,7 @@ def api_save():
         ok = source.download(url, folder / THEME_FILENAME)
     if not ok:
         return jsonify({"error": "Téléchargement ou conversion impossible (détails : bouton Journal)"}), 502
-    emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind)
+    emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind, series.parent.name)
     logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
     return jsonify({"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]})
 
@@ -361,6 +401,14 @@ def _emby_key_changed(key):
     EMBY.api_key = key
 
 
+for _i, _c in enumerate(CATS):
+    logger.info("Onglet %s : %s", _c["name"], " + ".join(_c["paths"]))
+if IGNORED_FOLDERS:
+    logger.info("Dossiers ignorés (type non reconnu) : %s — à ajouter dans config.json (library.categories) si besoin", ", ".join(IGNORED_FOLDERS))
+try:
+    _migrate_old_backups()
+except Exception:
+    logger.exception("Migration des anciennes sauvegardes impossible")
 emby_settings.init_app(app, BASE_DIR, lambda: EMBY.host, _emby_key_changed)
 diag.init_app(app, APP_VERSION, lambda: ROOTS, EMBY.describe, _batch_state_text)
 

@@ -143,19 +143,24 @@ class TestCategories(unittest.TestCase):
     def test_guess_kind(self):
         from src.library import guess_kind
         self.assertEqual(guess_kind("Manga"), "anime")
-        self.assertEqual(guess_kind("Films"), "movie")
+        self.assertEqual(guess_kind("Films HD"), "movie")
+        self.assertEqual(guess_kind("Films 4K"), "movie")
         self.assertEqual(guess_kind("Séries TV"), "series")
+        self.assertIsNone(guess_kind("Musique"))
+        self.assertIsNone(guess_kind("Archdaily"))
 
-    def test_discover(self):
+    def test_discover_regroupe_et_ignore(self):
         import tempfile
         from pathlib import Path
         from src.library import discover_categories
         with tempfile.TemporaryDirectory() as t:
-            for n in ("Films", "Manga", "Séries", "@eaDir"):
+            for n in ("Films HD", "Films 4K", "Manga", "Séries", "Musique", "@eaDir"):
                 (Path(t) / n).mkdir()
-            cats = discover_categories({"library": {"auto_parent": t}})
-            self.assertEqual([c["kind"] for c in cats], ["anime", "series", "movie"])
-            self.assertEqual(len(discover_categories({"library": {"auto_parent": t, "categories": [{"name": "X", "path": str(Path(t) / "Films"), "kind": "series"}]}})), 3)
+            ign = []
+            cats = discover_categories({"library": {"auto_parent": t}}, ign)
+            self.assertEqual([c["name"] for c in cats], ["Animes", "Séries", "Films"])
+            self.assertEqual(len(cats[2]["paths"]), 2)
+            self.assertEqual(ign, ["Musique"])
 
 
 class TestYouTube(unittest.TestCase):

@@ -6,7 +6,8 @@
     "timeout": 30
   },
   "themes": {
-    "output_dir": "/opt/mouflopening/data/themes"
+    "output_dir": "/opt/mouflopening/data/themes",
+    "backup_dir": "/mnt/mouflosyno/MouFlopening/Anciens thèmes"
   },
   "sources": {
     "animethemes": {

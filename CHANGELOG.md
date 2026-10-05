@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0] - 2026-10-05
+
+### Modifié
+- **Trois onglets seulement : Animes, Séries, Films.** Les dossiers du même type sont regroupés (Films HD + Films 4K dans l'onglet Films, avec le dossier d'origine affiché sur chaque ligne). Les dossiers dont le nom n'évoque aucun de ces types sont ignorés (liste dans le Journal) ; on peut les ajouter à la main dans `config.json` (`library.categories`, avec `kind` et `path` ou `paths`)
+- **Les anciens thèmes sont mis de côté dans `/mnt/mouflosyno/MouFlopening/Anciens thèmes`** (réglable : `themes.backup_dir`), plus dans `data/`. Les sauvegardes déjà faites dans `data/themes-backup` y sont déplacées automatiquement. Si le partage est inaccessible, repli provisoire sur `data/`
+- Actualisation Emby : distingue un même film présent en HD et en 4K
+
 ## [0.5.1] - 2026-10-05
 
 ### Ajouté
