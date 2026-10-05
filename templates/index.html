@@ -297,7 +297,7 @@ async function search() {
             <button class="btn small" data-a="${ai}" data-t="${ti}">Utiliser</button></div>`).join('')}
         </div>`).join('');
     document.querySelectorAll('#cands .ytbtn').forEach(b => b.addEventListener('click', () => {
-        b.outerHTML = `<iframe class="ytplay" src="https://www.youtube.com/embed/${encodeURIComponent(b.dataset.yt)}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        b.outerHTML = `<iframe class="ytplay" src="https://www.youtube.com/embed/${encodeURIComponent(b.dataset.yt)}?autoplay=1" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
     }));
     document.querySelectorAll('#cands button[data-a]').forEach(b => b.addEventListener('click', async () => {
         const t = res[b.dataset.a].themes[b.dataset.t];

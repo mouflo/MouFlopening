@@ -270,7 +270,7 @@ def init_app(app, version=""):
     def security_headers(resp):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
-        resp.headers.setdefault("Referrer-Policy", "same-origin")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         return resp
 
 

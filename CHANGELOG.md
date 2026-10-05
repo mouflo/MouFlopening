@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.4] - 2026-10-05
+
+### Corrigé
+- Écoute YouTube : le lecteur intégré affichait « Erreur 153 » car l'appli n'envoyait aucune information de provenance à YouTube. Le lecteur est de nouveau autorisé à démarrer (la provenance n'est envoyée que par une connexion HTTPS)
+
 ## [0.6.3] - 2026-10-05
 
 ### Corrigé
