@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-MouFlopening - Theme song downloader and Emby integrator
-Main application entry point and CLI interface
+MouFlopening - Téléchargeur de thèmes musicaux et intégration à Emby
+Point d'entrée en ligne de commande (l'interface web est dans app.py)
 """
 
 import json
@@ -19,7 +19,7 @@ from src.config import load_config
 
 
 class MouFlopening:
-    """Main application class for MouFlopening"""
+    """Classe principale de MouFlopening"""
 
     def __init__(self, config_path: str = "config.json"):
         """
@@ -42,7 +42,7 @@ class MouFlopening:
             sys.exit(1)
 
     def _setup_logging(self) -> None:
-        """Configure logging based on configuration"""
+        """Règle le journal d'après la configuration"""
         log_config = self.config.get('logging', {})
         log_level = log_config.get('level', 'INFO')
         log_file = log_config.get('file', 'mouflopening.log')
@@ -58,7 +58,7 @@ class MouFlopening:
         )
 
     def _initialize_sources(self) -> None:
-        """Initialize all configured theme sources"""
+        """Prépare toutes les sources de thèmes configurées"""
         sources_config = self.config.get('sources', {})
 
         # Initialize AnimeThemes source
@@ -162,7 +162,7 @@ class MouFlopening:
         logging.info(f"Terminé : {done} thème(s) ajouté(s), {failed} introuvable(s)")
 
     def trigger_emby_scan(self) -> None:
-        """Trigger Emby library refresh"""
+        """Demande à Emby de relire la médiathèque"""
         emby_config = self.config.get('emby', {})
         emby_host = emby_config.get('host')
         api_key = emby_config.get('api_key')
@@ -176,30 +176,30 @@ class MouFlopening:
         pass
 
     def show_interactive_menu(self) -> None:
-        """Display interactive menu for user"""
+        """Affiche le menu interactif"""
         while True:
             click.clear()
             click.echo("=" * 50)
-            click.echo("MouFlopening - Theme Downloader")
+            click.echo("MouFlopening - Téléchargeur de thèmes")
             click.echo("=" * 50)
             click.echo()
-            click.echo("1. Download single theme")
-            click.echo("2. Batch download themes")
-            click.echo("3. Scan for missing themes")
-            click.echo("4. Trigger Emby scan")
-            click.echo("5. Exit")
+            click.echo("1. Télécharger un thème")
+            click.echo("2. Télécharger plusieurs thèmes (fichier de titres)")
+            click.echo("3. Chercher les thèmes manquants")
+            click.echo("4. Lancer un scan d'Emby")
+            click.echo("5. Quitter")
             click.echo()
 
-            choice = click.prompt("Choose an option", type=int)
+            choice = click.prompt("Ton choix", type=int)
 
             if choice == 1:
-                title = click.prompt("Enter media title")
-                media_type = click.prompt("Media type (auto/tv/movie/anime)", default="auto")
+                title = click.prompt("Titre du film, de la série ou de l'anime")
+                media_type = click.prompt("Type (auto/tv/movie/anime)", default="auto")
                 self.download_theme(title, media_type)
                 click.pause()
 
             elif choice == 2:
-                titles_file = click.prompt("Path to titles file")
+                titles_file = click.prompt("Chemin du fichier de titres")
                 self.batch_download(titles_file)
                 click.pause()
 
@@ -212,21 +212,21 @@ class MouFlopening:
                 click.pause()
 
             elif choice == 5:
-                click.echo("Goodbye!")
+                click.echo("Au revoir !")
                 break
 
 
 @click.command()
-@click.option('--config', default='config.json', help='Path to configuration file')
-@click.option('--interactive', is_flag=True, help='Interactive menu mode')
-@click.option('--download', type=str, help='Download single theme by title')
-@click.option('--batch', type=str, help='Batch download from file')
-@click.option('--scan-missing', is_flag=True, help='Scan library for missing themes')
+@click.option('--config', default='config.json', help='Chemin du fichier de configuration')
+@click.option('--interactive', is_flag=True, help='Menu interactif')
+@click.option('--download', type=str, help='Télécharge le thème d\'un titre')
+@click.option('--batch', type=str, help='Télécharge les thèmes d\'une liste de titres (un par ligne)')
+@click.option('--scan-missing', is_flag=True, help='Cherche les thèmes manquants dans la médiathèque')
 @click.option('--dry-run', is_flag=True, help='Avec --scan-missing : liste sans rien télécharger')
 @click.option('--limit', type=int, default=None, help='Avec --scan-missing : nombre maximum de séries')
 def main(config: str, interactive: bool, download: str, batch: str, scan_missing: bool,
          dry_run: bool, limit: int) -> None:
-    """MouFlopening - Theme song downloader and Emby integrator"""
+    """MouFlopening - Téléchargeur de thèmes musicaux et intégration à Emby"""
 
     app = MouFlopening(config)
 

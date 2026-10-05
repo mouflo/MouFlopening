@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.24.2] - 2026-10-05
+
+### Amélioré
+- README entièrement en français et à jour (fonctionnalités, installation, utilisation), captures d'écran refaites (page Réglages et éditeur audio ajoutés)
+- Menu et aide de la ligne de commande traduits en français
+
 ## [0.24.1] - 2026-10-05
 
 ### Amélioré
