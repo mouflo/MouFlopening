@@ -306,10 +306,10 @@ function renderDetail() {
         <div id="msg"></div>
         <div id="cands"></div>`;
     renderTargets(); refreshCurrent();
-    $('btnSearch').addEventListener('click', search);
+    $('btnSearch').addEventListener('click', () => search(true));
     refreshSkip();
     $('optOrig').addEventListener('change', e => { origOn = e.target.checked; try { localStorage.setItem('mf_orig', origOn ? '1' : '0'); } catch (x) {} });
-    $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+    $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(true); });
     if (!target.has_theme && !target.skipped) search();
 }
 
@@ -349,10 +349,10 @@ function refreshCurrent() {
         ? `<div class="current">Thème actuel · ${esc(target.label)}<audio controls preload="none" src="/api/theme?id=${encodeURIComponent(target.id)}&t=${Date.now()}"></audio></div>` : '';
 }
 
-async function search() {
+async function search(full) {
     const title = $('q').value.trim(); if (!title) return;
     $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), ''); ensureVisible($('cands'));
-    const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn},
+    const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn, full: full === true},
         (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (!done) ensureVisible($('cands')); });
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
@@ -364,6 +364,10 @@ async function search() {
     }
     $('cands').className = 'cands';
     if ((data.queries || []).length > 1) note($('msg'), 'Recherché sous : ' + data.queries.join(' · '), 'ok');
+    else if (data.themerr_only) {
+        $('msg').innerHTML = `<div class="note ok">★ Thème validé par la communauté (ThemerrDB) : pas de recherche YouTube. <button class="btn ghost small" id="btnMore">Chercher aussi sur YouTube</button></div>`;
+        $('btnMore').addEventListener('click', () => search(true));
+    }
     else if (data.note) note($('msg'), data.note, 'warn');
     $('cands').innerHTML = res.map((a, ai) => `
         <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.channel ? a.channel + ' · ' : '')}${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>

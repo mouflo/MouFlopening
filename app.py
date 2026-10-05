@@ -450,6 +450,19 @@ def _search_work(body):
     note = ""
     folder, series, _ = library.resolve_target(ROOTS, body.get("id", ""))
     series_name = series.name if series else ""
+    results, seen = [], set()
+    if series and kind != "anime":
+        progress.say("Consultation de ThemerrDB (thème validé par la communauté)…")
+        tr, _why = themerr_for(series, kind)
+        progress.say("ThemerrDB : thème trouvé ★" if tr else "ThemerrDB : rien pour ce titre")
+        if tr:
+            from src.sources.youtube import watch_url
+            seen.add(tr["video_id"])
+            results.append({"name": "★ " + (tr["title"] or title), "year": "base ThemerrDB", "channel": "choix validé par la communauté",
+                            "score": 100, "themes": [{"slug": "▶", "type": "yt", "youtube": tr["video_id"], "url": watch_url(tr["video_id"])}]})
+            if not body.get("full"):         # thème validé par la communauté : inutile de chercher sur YouTube (sauf demande explicite)
+                return {"results": results, "source": "ThemerrDB", "queries": [], "themerr_only": True,
+                        "note": "", "skipped": False}, 200
     if body.get("original"):
         # titre original d'après Emby / TheMovieDB (le titre français ne donne pas toujours de résultat)
         if series:
@@ -467,16 +480,6 @@ def _search_work(body):
             return SOURCE.candidates(t)
         return YOUTUBE.candidates(t, "movie" if kind == "movie" else "series", year=year_of(series_name))
 
-    results, seen = [], set()
-    if series and kind != "anime":
-        progress.say("Consultation de ThemerrDB (thème validé par la communauté)…")
-        tr, _why = themerr_for(series, kind)
-        progress.say("ThemerrDB : thème trouvé ★" if tr else "ThemerrDB : rien pour ce titre")
-        if tr:
-            from src.sources.youtube import watch_url
-            seen.add(tr["video_id"])
-            results.append({"name": "★ " + (tr["title"] or title), "year": "base ThemerrDB", "channel": "choix validé par la communauté",
-                            "score": 100, "themes": [{"slug": "▶", "type": "yt", "youtube": tr["video_id"], "url": watch_url(tr["video_id"])}]})
     for i, t in enumerate(titles, 1):
         progress.say(f"Recherche {'AnimeThemes' if kind == 'anime' else 'sur YouTube'} : « {t} »" + (f" ({i}/{len(titles)})" if len(titles) > 1 else "") + "…")
         try:

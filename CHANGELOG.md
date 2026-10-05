@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.13.1] - 2026-10-05
+
+### Amélioré
+- Quand ThemerrDB propose un thème (validé par la communauté), la recherche s'arrête là : plus de recherche YouTube ni de recherche du titre original, donc le résultat arrive beaucoup plus vite. Un bouton « Chercher aussi sur YouTube » (ou le bouton « Chercher ») permet de voir d'autres propositions
+
 ## [0.13.0] - 2026-10-05
 
 ### Ajouté
