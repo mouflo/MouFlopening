@@ -17,6 +17,7 @@
 - Comparaison de titres via `difflib` (plus de dépendance `fuzzywuzzy`)
 
 ### Corrigé
+- Premier déploiement du service web : relancé par un nouveau commit (l'ancien `deploy.sh` s'était remplacé en cours d'exécution et avait sauté l'installation du service)
 - Les messages de log n'apparaissaient pas à l'écran
 - Version `ffmpeg-python` inexistante dans `requirements.txt`
 
