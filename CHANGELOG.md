@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.16.4] - 2026-10-05
+
+### Amélioré
+- Si le thème de la communauté (★) ne peut pas être téléchargé (vidéo bloquée par YouTube pour droits d'auteur…), la page lance tout de suite la recherche YouTube normale, sans cette vidéo, pour proposer d'autres choix au lieu de rester bloqué
+
 ## [0.16.3] - 2026-10-05
 
 ### Amélioré

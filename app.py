@@ -487,6 +487,9 @@ def _search_work(body):
     if series and kind != "anime":
         progress.say("Consultation de ThemerrDB (thème validé par la communauté)…")
         tr, _why = themerr_for(series, kind)
+        if tr and tr["video_id"] in (body.get("exclude") or []):      # vidéo déjà refusée par YouTube au téléchargement
+            progress.say("ThemerrDB : thème trouvé, mais YouTube refuse de le télécharger : recherche d'autres vidéos")
+            tr, _why = None, "vidéo bloquée"
         progress.say("ThemerrDB : thème trouvé ★" if tr else f"ThemerrDB : rien — {_why or 'raison inconnue'}")
         if tr:
             from src.sources.youtube import watch_url

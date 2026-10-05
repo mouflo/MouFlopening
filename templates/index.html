@@ -381,10 +381,11 @@ function refreshCurrent() {
     if (target.has_theme) $('btnDel').addEventListener('click', () => deleteStep(1));
 }
 
+const blockedVideos = new Set();     // vidéos de ThemerrDB que YouTube refuse de télécharger : on les écarte des propositions
 async function search(full) {
     const title = $('q').value.trim(); if (!title) return;
     $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), ''); ensureVisible($('cands'));
-    const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn, full: full === true},
+    const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn, full: full === true, exclude: [...blockedVideos]},
         (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (!done) ensureVisible($('cands')); });
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
@@ -438,6 +439,13 @@ async function search(full) {
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = false);
         b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
+        if (r.error && t.youtube && String(res[b.dataset.a].name).startsWith('★')) {
+            // le thème de la communauté ne peut pas être téléchargé : on bascule tout de suite sur la recherche YouTube
+            blockedVideos.add(t.youtube);
+            await search(true);
+            note($('msg'), r.error + ' Voici d\'autres propositions sur YouTube.', 'warn');
+            return;
+        }
         if (!r.error) {
             document.querySelectorAll('.cand').forEach(c => c.classList.toggle('chosen', c.dataset.ai === b.dataset.a));
             $('cands').classList.add('collapsed');
