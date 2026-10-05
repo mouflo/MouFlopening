@@ -107,6 +107,7 @@ def kind_of(item_id):
 app = Flask(__name__)
 
 from src import progress
+from src import skipped
 from src.netfix import repair_urllib3
 
 
@@ -155,6 +156,7 @@ def _migrate_old_backups():
         except OSError as e:
             logger.warning("Déplacement impossible (%s) : %s", item.name, e)
 NORMALIZED_FILE = BASE_DIR / "data" / "normalized.json"
+skipped.init(BASE_DIR / "data" / "skipped.json")
 
 
 def _slug(text):
@@ -234,11 +236,16 @@ def _run_batch(limit, with_seasons, cat=0):
     todo = [("film" if kind == "movie" else "série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
     if with_seasons and kind != "movie":
         todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
+    sk = skipped.all_keys()
+    n_all = len(todo)
+    todo = [t for t in todo if str(t[2]) not in sk]          # les titres déjà recherchés sans résultat sont laissés de côté
+    n_skip = n_all - len(todo)
     if limit:
         todo = todo[:limit]
     with _batch_lock:
         BATCH.update(kind="download", running=True, stop=False, total=len(todo), done=0, failed=0, current="", messages=[])
-    _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)"))
+    _batch_note(f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)")
+                + (f" · {n_skip} mis de côté (déjà cherchés sans résultat) ignoré(s)" if n_skip else ""))
     try:
         for _what, title, folder, series, number in todo:
             if BATCH["stop"]:
@@ -248,6 +255,10 @@ def _run_batch(limit, with_seasons, cat=0):
             with _batch_lock:
                 BATCH["current"] = label
             ok, msg = _auto_one(folder, title, series, number, kind=kind)   # kind = type de l'onglet (anime / série / film)
+            if not ok:
+                skipped.add(folder)
+            else:
+                skipped.remove(folder)
             with _batch_lock:
                 BATCH["done" if ok else "failed"] += 1
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
@@ -413,8 +424,13 @@ def index():
 @app.route("/api/library")
 def api_library():
     items = library.list_library(ROOTS)
+    sk = skipped.all_keys()
     for it in items:
         root = int(it["id"].split("/")[0])
+        base = Path(ROOTS[root]) / it["name"]
+        it["skipped"] = (not it["has_theme"]) and str(base) in sk
+        for se in it["seasons"]:
+            se["skipped"] = (not se["has_theme"]) and str(base / se["name"]) in sk
         it["cat"] = ROOT_CAT[root]
         it["origin"] = Path(ROOTS[root]).name      # dossier d'origine (utile quand un onglet regroupe Films HD et Films 4K)
     cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": c["ok"], "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
@@ -477,8 +493,11 @@ def _search_work(body):
             seen.add(key)
             results.append(r)
     progress.say("Classement des résultats…")
+    if not results and folder:
+        skipped.add(folder)             # rien trouvé : mis de côté, pour ne plus le voir dans la liste « sans thème »
     results.sort(key=lambda r: -int(r.get("score") or 0))     # la sélection ThemerrDB (score 100) reste en tête
-    return {"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note}, 200
+    return {"results": results[:12], "source": "AnimeThemes" if kind == "anime" else "YouTube", "queries": titles, "note": note,
+            "skipped": bool(not results and folder)}, 200
 
 
 @app.route("/api/search", methods=["POST"])
@@ -513,6 +532,7 @@ def _save_work(data):
         progress.say("Mise à jour d'Emby…")
         emby = EMBY.refresh_series(series.name, data.get("title", ""), number, kind, series.parent.name)
     logger.info("Thème enregistré : %s", folder / THEME_FILENAME)
+    skipped.remove(folder)
     return {"ok": True, "message": f"Thème enregistré. {emby['message']}", "emby_ok": emby["ok"]}, 200
 
 
@@ -520,6 +540,16 @@ def _save_work(data):
 def api_save():
     data = request.get_json(silent=True) or {}
     return jsonify({"job": progress.start(lambda: _save_work(data))})
+
+
+@app.route("/api/skip", methods=["POST"])
+def api_skip():
+    data = request.get_json(silent=True) or {}
+    folder, _series, _n = library.resolve_target(ROOTS, data.get("id", ""))
+    if not folder:
+        return jsonify({"error": "Série ou saison introuvable"}), 404
+    (skipped.add if data.get("skip", True) else skipped.remove)(folder)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/auto", methods=["POST"])

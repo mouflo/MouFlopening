@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0] - 2026-10-05
+
+### Ajouté
+- **Mis de côté** : quand une recherche ne trouve rien, le titre quitte automatiquement la liste « sans thème » (il est marqué « rien trouvé ») : plus besoin de refaire défiler toute la liste pour retrouver ceux qu'on n'a pas encore cherchés. Un nouveau filtre « Recherché sans résultat » les regroupe, et un compteur « mis de côté » apparaît en haut
+- Boutons « ⏭ Mettre de côté » (à la main) et « ↩ Remettre dans la liste » sur la fiche d'un titre. Un titre mis de côté n'est plus recherché tout seul quand on le sélectionne
+- Le téléchargement de tous les thèmes manquants laisse de côté les titres déjà recherchés sans résultat, et y range ceux qu'il ne trouve pas. Dès qu'un thème est enregistré, le titre sort de cette catégorie
+
 ## [0.12.2] - 2026-10-05
 
 ### Corrigé
