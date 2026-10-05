@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.12.2] - 2026-10-05
+
+### Corrigé
+- Sur téléphone, l'étape en cours de la recherche est maintenant placée à environ un tiers de la hauteur de l'écran (la page laisse la place nécessaire) et reste visible quand de nouvelles étapes arrivent
+
 ## [0.12.1] - 2026-10-05
 
 ### Corrigé

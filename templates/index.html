@@ -61,7 +61,7 @@
     .row .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .pill { font-size:.72rem; padding:2px 8px; border-radius:10px; background:var(--field); color:var(--muted); white-space:nowrap; }
     .pill.ok { background:rgba(82,181,75,.18); color:#9bdc95; }
-    .steps { padding:14px 4px; font-size:.9rem; min-height:230px; }
+    .steps { padding:14px 4px; font-size:.9rem; min-height:60vh; }
     .stp { padding:3px 0; color:var(--muted); }
     .stp.cur { color:var(--text, #fff); font-weight:600; }
     .stp small { color:var(--muted); font-weight:400; margin-left:6px; }
@@ -182,11 +182,11 @@ async function runJob(url, body, onSteps) {
         if (st.done) return (st.result && st.result[0]) || {error: 'Réponse vide'};
     }
 }
-// Sur téléphone la zone de progression est sous l'écran : on remonte la fiche du titre tout en haut pour voir la recherche et ses étapes
+// Sur téléphone la progression est sous l'écran : on la place à environ un tiers de la hauteur, et on la suit si elle redescend
 function ensureVisible(el) {
-    const box = $('detail') || el;
-    const r = box.getBoundingClientRect(), e = el.getBoundingClientRect();
-    if (e.bottom > window.innerHeight - 20 || e.top < 0) window.scrollTo({top: Math.max(0, window.scrollY + r.top - 10), behavior: 'smooth'});
+    const e = el.getBoundingClientRect();
+    if (e.top < 70 || e.top > window.innerHeight * 0.6)
+        window.scrollTo({top: Math.max(0, window.scrollY + e.top - window.innerHeight * 0.3), behavior: 'smooth'});
 }
 function stepsHtml(steps, elapsed, done) {
     const past = steps.slice(0, -1).map(s => `<div class="stp done">✓ ${esc(s.text)}</div>`).join('');
@@ -333,7 +333,7 @@ async function search() {
     const title = $('q').value.trim(); if (!title) return;
     $('cands').innerHTML = `<div class="steps"><div class="stp cur"><span class="spin"></span>Démarrage de la recherche…</div></div>`; note($('msg'), ''); ensureVisible($('cands'));
     const data = await runJob('/api/search', {title, cat: curCat, id: target.id, original: origOn},
-        (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (steps.length === 1 && !done) ensureVisible($('cands')); });
+        (steps, el, done) => { $('cands').innerHTML = `<div class="steps">${stepsHtml(steps, el, done)}</div>`; if (!done) ensureVisible($('cands')); });
     if (data.error) { $('cands').innerHTML = ''; return note($('msg'), data.error, 'err'); }
     const res = data.results || [];
     if (!res.length) { $('cands').innerHTML = ''; return note($('msg'), (data.note ? data.note + '. ' : '') + 'Aucun résultat. Essaie un autre titre (anglais ou japonais) puis relance la recherche.', 'warn'); }
@@ -373,7 +373,7 @@ async function search() {
         b.disabled = true; b.textContent = '…';
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = true);
         const r = await runJob('/api/save', {id: target.id, url: t.url || t.audio || t.video, title: selected.title},
-            (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (steps.length === 1 && !done) ensureVisible($('msg')); });
+            (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); });
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = false);
         b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
