@@ -70,7 +70,9 @@ class TestLibrary(unittest.TestCase):
 
     def test_list_library_states(self):
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "A").mkdir(); (Path(d) / "B").mkdir(); (Path(d) / "B" / "theme.mp3").write_bytes(b"x" * 9000)
+            (Path(d) / "A").mkdir(); (Path(d) / "A" / "episode.mkv").write_bytes(b"x")
+            (Path(d) / "B").mkdir(); (Path(d) / "B" / "theme.mp3").write_bytes(b"x" * 9000)
+            (Path(d) / "C (2025)").mkdir()          # dossier vide (reste d'un renommage) : pas listé
             self.assertEqual([(i["name"], i["has_theme"]) for i in list_library([d])], [("A", False), ("B", True)])
 
     def test_season_folders(self):

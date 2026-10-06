@@ -109,6 +109,14 @@ def season_query(title: str, number: int) -> str:
     return title if number <= 1 else f"{title} Season {number}"
 
 
+def _vide(folder: Path) -> bool:
+    """Dossier sans rien dedans (reste d'un renommage par Radarr/Sonarr) : pas un vrai titre, on ne le liste pas."""
+    try:
+        return next(folder.iterdir(), None) is None
+    except OSError:
+        return False
+
+
 def list_library(roots: List[str]) -> List[dict]:
     """Toutes les séries avec leur état. `id` = « numéro_du_dossier_racine/nom_du_dossier »."""
     items = []
@@ -117,7 +125,7 @@ def list_library(roots: List[str]) -> List[dict]:
         if not base.is_dir():
             continue
         for folder in sorted(base.iterdir(), key=lambda f: f.name.lower()):
-            if folder.is_dir() and folder.name not in IGNORED_DIRS and not folder.name.startswith("."):
+            if folder.is_dir() and folder.name not in IGNORED_DIRS and not folder.name.startswith(".") and not _vide(folder):
                 seasons = [{"id": f"{i}/{folder.name}/{sub.name}", "name": sub.name, "number": n,
                             "has_theme": find_theme(sub) is not None} for n, sub in season_folders(folder)]
                 items.append({"id": f"{i}/{folder.name}", "name": folder.name, "title": clean_title(folder.name),
