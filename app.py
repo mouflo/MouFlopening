@@ -596,6 +596,25 @@ def index():
     return render_template("index.html", version=APP_VERSION, target_db=f"{TARGET_DB:g}")
 
 
+@app.route("/api/poster")
+def api_poster():
+    """Poster du titre choisi (celui d'Emby, dans le dossier), pour vérifier qu'on cherche le générique du bon.
+    Pour une saison : son poster (« season01-poster.jpg ») s'il existe, sinon celui de la série."""
+    _, series, saison = library.resolve_target(ROOTS, request.args.get("id", ""))
+    if series is None:
+        return jsonify({"error": "Titre introuvable"}), 404
+    noms = []
+    if saison is not None:
+        noms += ["season-specials-poster" if saison == 0 else f"season{saison:02d}-poster"]
+    noms += ["poster", "folder", "cover"]
+    for nom in noms:
+        for ext in ("jpg", "jpeg", "png", "webp"):
+            f = series / f"{nom}.{ext}"
+            if f.is_file():
+                return send_file(f, max_age=86400)
+    return jsonify({"error": "Pas de poster"}), 404
+
+
 @app.route("/api/library")
 def api_library():
     items = library.list_library(ROOTS)
