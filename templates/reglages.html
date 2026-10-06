@@ -91,6 +91,7 @@
         <div class="state" id="tgState"></div>
         <div class="field"><label for="tgToken">Jeton du bot Telegram (donné par @BotFather)</label><input type="password" id="tgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:ABC… (laisse vide pour garder l'actuel)"></div>
         <div class="field"><label for="tgChat">Identifiant de ta discussion</label><input type="text" id="tgChat" autocomplete="off" placeholder="Un nombre, ex. 123456789 (laisse vide pour garder l'actuel)"></div>
+        <div class="field"><label for="tgThread">Sujet du groupe (facultatif : groupe Telegram à sujets)</label><input type="text" id="tgThread" inputmode="numeric" autocomplete="off" placeholder="vide = pas de sujet"><div class="row" style="margin-top:6px"><button class="btn ghost" id="tgDetect">🔎 Détecter le groupe et le sujet</button></div><div class="tabsinfo">Dans ton groupe, ouvre le sujet de MouFlopening, écris « bonjour » (le bot doit être administrateur du groupe), puis clique sur le bouton : l'identifiant du groupe et le sujet se remplissent. Enregistre ensuite.</div></div>
         <div class="state" id="nightState"></div>
         <div class="row"><button class="btn" id="nightSave">Enregistrer</button><button class="btn ghost" id="tgTest">📨 Tester Telegram</button><button class="btn ghost" id="nightRun">▶ Lancer le lot de nuit maintenant</button></div>
         <div id="nightMsg"></div>
@@ -151,19 +152,26 @@ $('nightHour').innerHTML = Array.from({length: 24}, (_, h) => `<option value="${
 async function loadNight() {
     const s = await api('/api/nightly');
     $('nightOn').checked = s.enabled; $('nightSeasons').checked = s.seasons; $('nightHour').value = s.hour; $('nightRetry').value = s.retry_days;
-    $('tgState').textContent = s.telegram ? `Telegram : réglé (discussion ${s.chat_hint}${s.telegram_origin === 'MouFlanimeXer' ? ', repris de MouFlanimeXer' : ''})` : 'Telegram : pas encore réglé';
+    $('tgState').textContent = s.telegram ? `Telegram : réglé (discussion ${s.chat_hint}${s.thread_id ? ', sujet ' + s.thread_id : ''}${s.telegram_origin === 'MouFlanimeXer' ? ', repris de MouFlanimeXer' : ''})` : 'Telegram : pas encore réglé';
+    $('tgThread').value = s.thread_id || ''; window._tgThread = s.thread_id || '';
     $('nightState').textContent = s.last_summary ? 'Dernier lot de nuit : ' + s.last_summary : '';
 }
 $('nightSave').addEventListener('click', async () => {
     const r1 = await post('/api/nightly', {enabled: $('nightOn').checked, seasons: $('nightSeasons').checked, hour: Number($('nightHour').value), retry_days: Number($('nightRetry').value || 0)});
     if (r1.error) return say('nightMsg', r1.error, false);
-    if ($('tgToken').value.trim() || $('tgChat').value.trim()) {
+    if ($('tgToken').value.trim() || $('tgChat').value.trim() || $('tgThread').value.trim() !== (window._tgThread || '')) {
         say('nightMsg', 'Vérification de Telegram…', true);
-        const r = await post('/api/settings/telegram', {token: $('tgToken').value, chat_id: $('tgChat').value});
+        const r = await post('/api/settings/telegram', {token: $('tgToken').value, chat_id: $('tgChat').value, thread_id: $('tgThread').value});
         if (!r.ok) return say('nightMsg', r.error, false);
         $('tgToken').value = ''; $('tgChat').value = ''; say('nightMsg', r.message, true);
     } else say('nightMsg', 'Enregistré.', true);
     loadNight();
+});
+$('tgDetect').addEventListener('click', async () => {
+    say('nightMsg', 'Recherche de ton message dans le sujet…', true);
+    const r = await post('/api/settings/telegram', {action: 'detect', token: $('tgToken').value});
+    if (r.ok) { $('tgChat').value = r.chat_id; $('tgThread').value = r.thread_id; }
+    say('nightMsg', r.message || r.error, r.ok);
 });
 $('tgTest').addEventListener('click', async () => { say('nightMsg', 'Envoi…', true); const r = await post('/api/settings/telegram', {}); say('nightMsg', r.message || r.error, r.ok); });
 $('nightRun').addEventListener('click', async () => {

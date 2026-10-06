@@ -21,7 +21,8 @@ def init_app(app, base_dir, nightly, run_now, is_busy):
         tok, chat, origin = nightly.telegram_config()
         s = nightly.settings()
         return jsonify({**s, "telegram": bool(tok and chat), "telegram_origin": origin,
-                        "chat_hint": ("…" + chat[-3:]) if chat else ""})
+                        "chat_hint": ("…" + chat[-3:]) if chat else "",
+                        "thread_id": nightly.telegram_thread()})
 
     @app.route("/api/nightly", methods=["POST"])
     def nightly_save():
@@ -53,7 +54,15 @@ def init_app(app, base_dir, nightly, run_now, is_busy):
     def telegram_save():
         body = request.get_json(silent=True) or {}
         tok, chat = str(body.get("token", "")).strip(), str(body.get("chat_id", "")).strip()
-        if not tok and not chat:                      # seulement tester ce qui est déjà réglé
+        if body.get("action") == "detect":
+            tok = tok or nightly.telegram_config()[0]
+            if not nightly.valid_token(tok):
+                return jsonify({"ok": False, "error": "Colle d'abord le jeton du bot (ou enregistre-le)."}), 400
+            ok, c, t, err = nightly.detect_group(tok)
+            return jsonify({"ok": ok, "chat_id": c, "thread_id": t, "error": err,
+                            "message": "Groupe et sujet trouvés : pense à cliquer sur « Enregistrer »." if ok else ""}), (200 if ok else 400)
+        thread = str(body["thread_id"]).strip() if "thread_id" in body else nightly.telegram_thread()
+        if not tok and not chat and thread == nightly.telegram_thread():   # seulement tester ce qui est déjà réglé
             ok, msg = nightly.send("✅ MouFlopening : Telegram fonctionne, tu recevras ici le compte rendu de la nuit 🌙")
             return jsonify({"ok": ok, "message": msg})
         cur_tok, cur_chat, _o = nightly.telegram_config()
@@ -62,14 +71,18 @@ def init_app(app, base_dir, nightly, run_now, is_busy):
             return jsonify({"ok": False, "error": "Jeton invalide : il ressemble à 123456789:ABC… (donné par @BotFather), sans espace."}), 400
         if not nightly.valid_chat(chat):
             return jsonify({"ok": False, "error": "Identifiant de discussion invalide : un nombre (ex. 123456789), ou @nom d'un canal."}), 400
+        if thread and not nightly.valid_thread(thread):
+            return jsonify({"ok": False, "error": "Le numéro du sujet est un nombre (ex. 4). Laisse vide si tu n'utilises pas de sujets."}), 400
         ok, msg = nightly.check_bot(tok)
         if not ok:
             return jsonify({"ok": False, "error": msg + ". Rien n'a été enregistré."}), 400
-        ok, msg = nightly.send("✅ MouFlopening : Telegram fonctionne, tu recevras ici le compte rendu de la nuit 🌙", tok, chat)
+        ok, msg = nightly.send("✅ MouFlopening : Telegram fonctionne, tu recevras ici le compte rendu de la nuit 🌙", tok, chat, thread)
         if not ok:
             return jsonify({"ok": False, "error": msg + ". Rien n'a été enregistré (as-tu écrit un message à ton bot au moins une fois ?)."}), 400
         _write_secret(secrets_file, "TELEGRAM_BOT_TOKEN", tok)
         _write_secret(secrets_file, "TELEGRAM_CHAT_ID", chat)
+        _write_secret(secrets_file, "TELEGRAM_THREAD_ID", thread)
         os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"] = tok, chat
+        os.environ["TELEGRAM_THREAD_ID"] = thread
         logger.info("Telegram réglé depuis la page web")
         return jsonify({"ok": True, "message": "Enregistré : un message de test vient d'arriver sur Telegram."})

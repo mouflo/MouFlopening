@@ -3,6 +3,7 @@
 ## [0.26.0] - 2026-10-06
 
 ### Ajouté
+- 📨 **Telegram : un sujet par appli** (Réglages → Lot de nuit & Telegram) : champ « Sujet du groupe » et bouton « 🔎 Détecter le groupe et le sujet » ; vide = comportement d'avant. Le sujet n'est jamais repris d'une autre appli.
 - 🕘 **Anciens thèmes** : sur la fiche d'un titre, la liste de ses anciens thèmes (du plus récent au plus ancien) à écouter et à **restaurer** ; « ↩️ Annuler le dernier remplacement ». Restaurer met le thème actuel de côté, rien n'est jamais supprimé
 - ✂️ **Coupe automatique** (Réglages → Volume) : les nouveaux thèmes plus longs que la durée choisie sont coupés avec un fondu de sortie (désactivée par défaut ; jamais pour un thème coupé avec l'éditeur)
 - 🔁 **Titres mis de côté plus malins** : la raison et la date sont enregistrées (affichées sur la fiche et au survol), les titres sont retentés automatiquement après N jours (Réglages → Lot de nuit, 30 par défaut, 0 = jamais), et le bouton « Réessayer les mis de côté » les remet tout de suite dans « sans thème »

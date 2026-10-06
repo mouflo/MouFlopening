@@ -73,6 +73,33 @@ def telegram_config():
     return "", "", ""
 
 
+def valid_thread(t):
+    return bool(re.match(r"^\d{1,12}$", t or ""))
+
+
+def telegram_thread():
+    """Sujet du groupe Telegram (facultatif). Propre à MouFlopening : jamais repris de MouFlanimeXer."""
+    t = os.getenv("TELEGRAM_THREAD_ID", "").strip()
+    return t if valid_thread(t) and os.getenv("TELEGRAM_BOT_TOKEN", "").strip() else ""
+
+
+def detect_group(token):
+    """(ok, identifiant du groupe, numéro du sujet, erreur) d'après le dernier message écrit dans un sujet."""
+    repair_urllib3()
+    try:
+        r = requests.post(f"https://api.telegram.org/bot{token}/getUpdates", json={"limit": 50, "timeout": 0}, timeout=15)
+        maj = r.json().get("result", []) if r.status_code == 200 else []
+    except (requests.exceptions.RequestException, ValueError) as e:
+        return False, "", "", "Telegram injoignable : " + type(e).__name__
+    for m in reversed(maj):
+        msg = m.get("message") or {}
+        c = msg.get("chat") or {}
+        if c.get("type") == "supergroup" and c.get("id") and msg.get("message_thread_id") and msg.get("is_topic_message"):
+            return True, str(c["id"]), str(msg["message_thread_id"]), ""
+    return False, "", "", ("Aucun message de sujet reçu : dans ton groupe, ouvre le sujet de cette appli, écris « bonjour » "
+                           "(le bot doit être administrateur du groupe), puis réessaie.")
+
+
 def valid_token(t):
     return bool(_TOKEN_RE.match(t or ""))
 
@@ -102,16 +129,21 @@ def check_bot(token):
         return True, "Bot reconnu"
 
 
-def send(text, token=None, chat=None):
-    """Envoie un message. -> (ok, message). Ne lève jamais d'exception ; le jeton n'apparaît jamais dans le retour."""
+def send(text, token=None, chat=None, thread=None):
+    """Envoie un message. -> (ok, message). Ne lève jamais d'exception ; le jeton n'apparaît jamais dans le retour.
+    thread : None = sujet des réglages ; "" = aucun ; sinon numéro du sujet."""
     if not token:
         token, chat, _o = telegram_config()
+        if thread is None:
+            thread = telegram_thread()
     if not token or not chat:
         return False, "Telegram n'est pas réglé"
     repair_urllib3()
+    corps = {"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}
+    if valid_thread(thread):
+        corps["message_thread_id"] = int(thread)
     try:
-        r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                          json={"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}, timeout=15)
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=corps, timeout=15)
     except requests.exceptions.RequestException as e:
         return False, "Telegram injoignable : " + type(e).__name__
     if r.status_code == 200:
