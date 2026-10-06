@@ -90,8 +90,9 @@
         <div class="field" style="max-width:340px"><label for="nightRetry">Réessayer les titres mis de côté après (jours, 0 = jamais)</label><input type="text" inputmode="numeric" id="nightRetry" placeholder="30"></div>
         <div class="state" id="tgState"></div>
         <div class="field"><label for="tgToken">Jeton du bot Telegram (donné par @BotFather)</label><input type="password" id="tgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:ABC… (laisse vide pour garder l'actuel)"></div>
-        <div class="field"><label for="tgChat">Identifiant de ta discussion</label><input type="text" id="tgChat" autocomplete="off" placeholder="Un nombre, ex. 123456789 (laisse vide pour garder l'actuel)"></div>
-        <div class="field"><label for="tgThread">Sujet du groupe (facultatif : groupe Telegram à sujets)</label><input type="text" id="tgThread" inputmode="numeric" autocomplete="off" placeholder="vide = pas de sujet"><div class="row" style="margin-top:6px"><button class="btn ghost" id="tgDetect">🔎 Détecter le groupe et le sujet</button></div><div class="tabsinfo">Dans ton groupe, ouvre le sujet de MouFlopening, écris « bonjour » (le bot doit être administrateur du groupe), puis clique sur le bouton : l'identifiant du groupe et le sujet se remplissent. Enregistre ensuite.</div></div>
+        <div class="field"><label for="tgChat">Identifiant de ta discussion, ou celui du groupe (commence par -100)</label><input type="text" id="tgChat" autocomplete="off" placeholder="Un nombre, ex. 123456789 (laisse vide pour garder l'actuel)"></div>
+        <div class="field"><label for="tgLien">Envoyer dans un sujet de groupe : lien d'un message du sujet</label><div class="row nowrap"><input type="text" id="tgLien" autocapitalize="off" spellcheck="false" placeholder="https://t.me/c/1234567890/45/678"><button class="btn ghost" id="tgLienLire">Utiliser ce lien</button></div><div class="tabsinfo">Dans ton groupe Telegram, ouvre le sujet de MouFlopening, fais un appui long sur un message → « Copier le lien », colle-le ici : le groupe et le numéro du sujet se remplissent. Le bot doit être membre du groupe.</div></div>
+        <div class="field"><label for="tgThread">Numéro du sujet (rempli par le lien ; vide = pas de sujet, messages en privé ou dans « Général »)</label><input type="text" id="tgThread" inputmode="numeric" autocomplete="off" placeholder="vide = pas de sujet"><div class="row" style="margin-top:6px"><button class="btn ghost" id="tgDetect">🔎 Détecter le groupe et le sujet</button></div><div class="tabsinfo">Détection automatique : écris « bonjour » dans le sujet puis appuie sur le bouton (impossible si le bot sert déjà à une autre application comme Jeedom : utilise alors le lien).</div></div>
         <div class="state" id="nightState"></div>
         <div class="row"><button class="btn" id="nightSave">Enregistrer</button><button class="btn ghost" id="tgTest">📨 Tester Telegram</button><button class="btn ghost" id="nightRun">▶ Lancer le lot de nuit maintenant</button></div>
         <div id="nightMsg"></div>
@@ -190,6 +191,12 @@ loadCk();
 simpleSave('trimSave', 'trimMsg', '/api/settings/trim', () => ({auto_trim: $('trimOn').checked, trim_max: $('trimMax').value, trim_fade: $('trimFade').value}));
 simpleSave('dbSave', 'dbMsg', '/api/settings/audio', () => ({target_db: $('dbValue').value}));
 keyForm('emby', '/api/settings/emby'); keyForm('tmdb', '/api/settings/tmdb'); loadPaths(); loadNight();
+
+$('tgLienLire').addEventListener('click', async () => {
+    const r = await post('/api/settings/telegram', {action: 'lien', lien: $('tgLien').value});
+    if (r.ok) { $('tgChat').value = r.chat_id; $('tgThread').value = r.thread_id; }
+    say('nightMsg', r.message || r.error, r.ok);
+});
 </script>
 </body>
 </html>

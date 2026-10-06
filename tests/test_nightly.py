@@ -51,7 +51,9 @@ class TestNightly(unittest.TestCase):
     def test_reglages(self):
         self.assertEqual(self.c.post("/api/nightly", json={"enabled": True, "hour": 25}).status_code, 400)
         self.assertTrue(self.c.post("/api/nightly", json={"enabled": True, "hour": 4}).get_json()["ok"])
-        s = self.c.get("/api/nightly").get_json()
+        # Sans reprendre le Telegram de MouFlanimeXer installé sur le même serveur
+        with mock.patch.object(nightly, "_FALLBACK", Path("/nonexistent/telegram_config.json")):
+            s = self.c.get("/api/nightly").get_json()
         self.assertTrue(s["enabled"]); self.assertEqual(s["hour"], 4); self.assertFalse(s["telegram"])
 
     def test_telegram_jeton_invalide(self):

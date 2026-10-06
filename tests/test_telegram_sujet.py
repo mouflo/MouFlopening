@@ -67,3 +67,17 @@ class TestSujet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LienTest(unittest.TestCase):
+    def test_lien_de_message(self):
+        self.assertEqual(nightly.lire_lien("https://t.me/c/1234567890/45/678"), ("-1001234567890", "45"))
+        self.assertEqual(nightly.lire_lien("t.me/c/1234567890/678"), ("-1001234567890", ""))
+        self.assertIsNone(nightly.lire_lien("https://exemple.fr"))
+
+    def test_sujet_general_pas_precise(self):
+        with mock.patch("src.nightly.requests.post") as post:
+            post.return_value.status_code = 200
+            post.return_value.json.return_value = {"ok": True}
+            nightly.send("x", "123456789:" + "A" * 35, "-1001", "1")
+        self.assertNotIn("message_thread_id", post.call_args.kwargs["json"])

@@ -88,6 +88,8 @@ def detect_group(token):
     repair_urllib3()
     try:
         r = requests.post(f"https://api.telegram.org/bot{token}/getUpdates", json={"limit": 50, "timeout": 0}, timeout=15)
+        if r.status_code != 200 and "webhook" in r.text.lower():
+            return False, "", "", WEBHOOK
         maj = r.json().get("result", []) if r.status_code == 200 else []
     except (requests.exceptions.RequestException, ValueError) as e:
         return False, "", "", "Telegram injoignable : " + type(e).__name__
@@ -141,7 +143,8 @@ def send(text, token=None, chat=None, thread=None):
     repair_urllib3()
     corps = {"chat_id": chat, "text": text[:4000], "disable_web_page_preview": True}
     if valid_thread(thread):
-        corps["message_thread_id"] = int(thread)
+        if int(thread) != 1:                     # 1 = sujet « Général » : Telegram veut qu'on ne précise rien
+            corps["message_thread_id"] = int(thread)
     try:
         r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=corps, timeout=15)
     except requests.exceptions.RequestException as e:
@@ -230,3 +233,15 @@ def loop(run_now, is_busy):
         except Exception:
             logger.exception("Lot de nuit en erreur")
         time.sleep(60)
+
+
+WEBHOOK = "Ce bot est déjà branché sur une autre application (par exemple Jeedom) : Telegram lui envoie directement les messages, l'appli ne peut donc pas les lire pour détecter quoi que ce soit. Utilise plutôt « Lien d'un message » (appui long sur un message du sujet → Copier le lien), ou crée un bot réservé à tes applis avec @BotFather."
+
+_LIEN = re.compile(r"t\.me/c/(\d{5,})/(\d+)(?:/(\d+))?")
+
+
+def lire_lien(lien):
+    """Lien d'un message de groupe (appui long → « Copier le lien ») → (groupe, sujet) ou None.
+    https://t.me/c/1234567890/45/678 : groupe -1001234567890, sujet 45 ; https://t.me/c/1234567890/678 : sujet « Général »."""
+    m = _LIEN.search(lien or "")
+    return ("-100" + m.group(1), m.group(2) if m.group(3) else "") if m else None

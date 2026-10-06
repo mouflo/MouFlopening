@@ -54,6 +54,12 @@ def init_app(app, base_dir, nightly, run_now, is_busy):
     def telegram_save():
         body = request.get_json(silent=True) or {}
         tok, chat = str(body.get("token", "")).strip(), str(body.get("chat_id", "")).strip()
+        if body.get("action") == "lien":
+            trouve = nightly.lire_lien(str(body.get("lien", "")))
+            if not trouve:
+                return jsonify({"ok": False, "error": "Ce lien ne ressemble pas à un lien de message de groupe (https://t.me/c/…). Dans le sujet, appui long sur un message → « Copier le lien »."}), 400
+            return jsonify({"ok": True, "chat_id": trouve[0], "thread_id": trouve[1],
+                            "message": "Groupe et sujet lus dans le lien : appuie sur « Enregistrer » (un message de test sera envoyé)."})
         if body.get("action") == "detect":
             tok = tok or nightly.telegram_config()[0]
             if not nightly.valid_token(tok):
