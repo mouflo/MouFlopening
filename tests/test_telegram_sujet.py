@@ -72,7 +72,7 @@ if __name__ == "__main__":
 class LienTest(unittest.TestCase):
     def test_lien_de_message(self):
         self.assertEqual(nightly.lire_lien("https://t.me/c/1234567890/45/678"), ("-1001234567890", "45"))
-        self.assertEqual(nightly.lire_lien("t.me/c/1234567890/678"), ("-1001234567890", ""))
+        self.assertEqual(nightly.lire_lien("t.me/c/1234567890/678"), ("-1001234567890", "678"))
         self.assertIsNone(nightly.lire_lien("https://exemple.fr"))
 
     def test_sujet_general_pas_precise(self):

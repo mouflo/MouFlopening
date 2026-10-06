@@ -242,6 +242,6 @@ _LIEN = re.compile(r"t\.me/c/(\d{5,})/(\d+)(?:/(\d+))?")
 
 def lire_lien(lien):
     """Lien d'un message de groupe (appui long → « Copier le lien ») → (groupe, sujet) ou None.
-    https://t.me/c/1234567890/45/678 : groupe -1001234567890, sujet 45 ; https://t.me/c/1234567890/678 : sujet « Général »."""
+    https://t.me/c/1234567890/45/678 : groupe -1001234567890, sujet 45 ; https://t.me/c/1234567890/5 : lien du sujet 5 (1 = « Général »)."""
     m = _LIEN.search(lien or "")
-    return ("-100" + m.group(1), m.group(2) if m.group(3) else "") if m else None
+    return ("-100" + m.group(1), m.group(2)) if m else None        # le 2e nombre est toujours le sujet
