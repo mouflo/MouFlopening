@@ -615,6 +615,7 @@ def api_library():
             if se["skipped"]:
                 se["skip_why"] = why(str(base / se["name"]))
         it["cat"] = ROOT_CAT[root]
+        it["chemin"] = str(base)                    # pour s'ouvrir directement sur ce titre depuis MouFloster (?dossier=…)
         it["origin"] = Path(ROOTS[root]).name      # dossier d'origine (utile quand un onglet regroupe Films HD et Films 4K)
     cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": c["ok"], "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
     return jsonify({"items": items, "emby": EMBY.configured, "categories": cats})

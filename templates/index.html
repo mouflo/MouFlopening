@@ -147,6 +147,7 @@
         <div class="livewin" id="batchLogTxt"></div>
     </div>
     <div class="panel" id="dupBox" style="display:none;margin-bottom:16px"></div>
+    <div id="venueBandeau" class="note ok" hidden></div>
     <div id="globalNote"></div>
 
     <div class="layout">
@@ -611,7 +612,22 @@ $('batchStop').addEventListener('click', async () => { await post('/api/batch/st
 
 $('filterText').addEventListener('input', () => { listCollapsed = false; renderList(); });
 $('filterState').addEventListener('change', () => { listCollapsed = false; renderList(); });
-loadLibrary().then(pollBatch);
+// Ouverture depuis MouFloster (« pas encore de générique ») : ?dossier=<chemin du titre>&retour=<adresse>
+async function ouvrirDepuisLien() {
+    const q = new URLSearchParams(location.search), dossier = q.get('dossier');
+    if (!dossier) return;
+    const retour = /^https?:\/\//i.test(q.get('retour') || '') ? q.get('retour') : '';
+    const fin = dossier.replace(/\/+$/, '').split('/').pop().toLowerCase();
+    const it = items.find(i => i.chemin === dossier) || items.find(i => (i.name || '').toLowerCase() === fin);
+    const b = $('venueBandeau');
+    b.hidden = false;
+    b.innerHTML = it ? `🎵 Générique pour « ${esc(it.title || it.name)} » (envoyé par MouFloster).` : `Titre introuvable dans la médiathèque : ${esc(dossier)}`;
+    if (retour) b.innerHTML += ` <a href="${esc(retour)}" style="margin-left:8px;font-weight:600">↩ Retour à MouFloster</a>`;
+    if (!it) return;
+    if (it.cat !== curCat) { curCat = it.cat; await loadLibrary(); }
+    select(it.id);
+}
+loadLibrary().then(ouvrirDepuisLien).then(pollBatch);
 
 // ---------- doublons de saisons ----------
 $('dupStart').addEventListener('click', async () => {
