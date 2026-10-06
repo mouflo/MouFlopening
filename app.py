@@ -1277,6 +1277,9 @@ def _nightly_run():
 
 
 nightly_settings.init_app(app, BASE_DIR, nightly, lambda: threading.Thread(target=_nightly_run, daemon=True).start(), lambda: bool(BATCH.get("running")))
+
+import redemarrage      # alerte Telegram après un plantage ou un redémarrage du serveur
+redemarrage.init_app(app, BASE_DIR)
 import settings_page
 
 
@@ -1325,4 +1328,5 @@ threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.ge
 
 
 if __name__ == "__main__":
+    redemarrage.verifier(BASE_DIR, "MouFlopening", BASE_DIR / "data" / "mouflopening.log", lambda t: nightly.send(t))
     app.run(debug=False, host="0.0.0.0", port=8001)
