@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>MouFlopening · génériques</title>
+<link rel="icon" type="image/svg+xml" href="/icons/mouflopening.svg"><link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png"><meta name="theme-color" content="#121315">
+<link rel="stylesheet" href="/ui/mou-ui.css?v={{ version|urlencode }}">
+<script src="/ui/mou-ui.js?v={{ version|urlencode }}" defer></script>
+<style>
+body { background:var(--bg, #121315); }
+.wrap { max-width:720px; margin:0 auto; padding:12px; }
+.panel { background:var(--card, #1c1d20); border-radius:8px; padding:16px; margin-bottom:14px; }
+.panel h2 { margin:0 0 6px; font-size:1.1rem; }
+.sub { color:var(--muted, #999); font-size:.88rem; line-height:1.45; margin-bottom:10px; }
+#q { width:100%; box-sizing:border-box; }
+.titre-sec { font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent, #52b54b); margin:16px 0 4px; }
+.ligne { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--line, #2c2c2c); }
+.ligne .info { flex:1; min-width:0; display:flex; flex-direction:column; }
+.ligne small { color:var(--muted, #999); font-size:.78rem; }
+.ligne .act { display:flex; gap:6px; flex-wrap:wrap; }
+.ligne audio { flex-basis:100%; width:100%; height:36px; }
+body.mou-skin .ligne button, .ligne a.mou-btn { text-decoration:none; width:auto; padding:6px 10px; font-size:.82rem; }
+.vide { color:var(--muted, #999); font-size:.85rem; padding:6px 0; }
+#mouSettingsOpen, #mouLogOpen { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <div id="mou-header" data-app="mouflopening" data-prefix="MouFl" data-rest="opening" data-version="{{ version }}" data-sub="Génériques pour ta médiathèque"></div>
+    <div class="panel">
+        <h2>🎵 Trouver un générique</h2>
+        <div class="sub">Tape le nom d'un film, d'une série ou d'un anime. Tu peux récupérer les génériques déjà choisis dans la médiathèque de l'admin, ou un générique validé par la communauté (ThemerrDB, AnimeThemes). Dépose le fichier « theme.mp3 » dans le dossier du titre de ta médiathèque Emby.</div>
+        <input type="search" id="q" placeholder="🔍 Nom du titre…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+        <div id="res"></div>
+    </div>
+</div>
+<script>
+(function () {
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+    let res = {chez_admin: [], tmdb: []}, minuteur = null;
+    async function chercher() {
+        const q = $('q').value.trim();
+        if (q.length < 2) { $('res').innerHTML = ''; return; }
+        $('res').innerHTML = '<div class="vide">Recherche…</div>';
+        res = await (await fetch('/api/copain/chercher?q=' + encodeURIComponent(q))).json();
+        $('res').innerHTML =
+            (res.chez_admin.length ? '<div class="titre-sec">📚 Déjà dans la médiathèque de l’admin</div>' + res.chez_admin.map(x =>
+                `<div class="ligne"><div class="info"><b>${esc(x.titre)}</b></div><div class="act">
+                 <a class="mou-btn small" href="/api/copain/theme?id=${encodeURIComponent(x.id)}&dl=1">⬇️ Télécharger</a></div>
+                 <audio controls preload="none" src="/api/copain/theme?id=${encodeURIComponent(x.id)}"></audio></div>`).join('') : '') +
+            '<div class="titre-sec">🌍 Générique validé par la communauté</div>' +
+            (res.tmdb.length ? res.tmdb.map((x, i) => `<div class="ligne" data-i="${i}"><div class="info"><b>${esc(x.titre)}</b>
+                <small>${[x.type === 'movie' ? 'film' : (x.anime ? 'anime' : 'série'), x.annee, x.original !== x.titre ? x.original : ''].filter(Boolean).map(esc).join(' · ')}</small></div>
+                <div class="act"><button type="button" class="mou-btn small" data-chercher="${i}">🔎 Chercher</button></div></div>`).join('')
+              : '<div class="vide">Aucun titre trouvé sur TheMovieDB.</div>');
+    }
+    $('q').addEventListener('input', () => { clearTimeout(minuteur); minuteur = setTimeout(chercher, 500); });
+    $('res').addEventListener('click', async e => {
+        const b = e.target.closest('[data-chercher]'); if (!b) return;
+        const x = res.tmdb[+b.dataset.chercher], act = b.parentNode;
+        act.innerHTML = '<span class="vide">Recherche…</span>';
+        const r = await (await fetch('/api/copain/communaute', {method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tmdb: x.tmdb, type: x.type, titre: x.titre, original: x.original, anime: x.anime})})).json();
+        act.innerHTML = r.ok ? `<a class="mou-btn small" href="/api/copain/fichier/${encodeURIComponent(r.jeton)}">⬇️ ${esc(r.source)}</a>`
+                             : `<span class="vide">${esc(r.error)}</span>`;
+    });
+})();
+</script>
+</body>
+</html>

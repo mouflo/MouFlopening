@@ -37,6 +37,9 @@
 
 ![Sur téléphone](docs/screenshots/mobile.png)
 
+## 👥 Comptes copains (1.0)
+⚙️ Réglages → Comptes → crée un compte : le copain arrive sur une page simple « 🎵 Trouver un générique ». Il récupère tes génériques déjà choisis (lecture seule) ou un générique validé par la communauté (ThemerrDB, AnimeThemes), jamais une vidéo YouTube choisie au hasard.
+
 ## ✨ Fonctionnalités
 
 - 🎵 **Plusieurs sources** : AnimeThemes (génériques d'animes), ThemerrDB (thèmes validés par la communauté pour les films et séries) et YouTube

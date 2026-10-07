@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.0] - 2026-10-07
+- 👥 **Comptes copains** (⚙️ Réglages → Comptes) : page « 🎵 Trouver un générique » rien que pour eux ; ils récupèrent les génériques déjà validés de l'admin (lecture seule) ou un générique validé par la communauté (ThemerrDB pour films et séries, AnimeThemes pour les animes). Jamais de recherche YouTube libre, jamais rien de modifié chez l'admin ; liens de téléchargement créés par le serveur
+- ⚙️ Réglages en onglets (Général · Dossiers · Connexions · Comptes), communs aux quatre applis
+- Ouverture depuis MouFlanga : bandeau et proposition de revenir une fois le générique posé
+- Lot de nuit : la saison 1 n'est plus cherchée automatiquement (doublon du générique de la série)
+
 ## [0.26.1] - 2026-10-07
 - Ouverture depuis MouFlanga (`?dossier=…&de=MouFlanga&retour=…`) : bandeau « envoyé par MouFlanga » et, une fois le générique en place, question « Revenir à MouFlanga ? » (même chose pour MouFloster)
 - Lot de nuit : la **saison 1** n'est plus jamais cherchée automatiquement (son générique est celui de la série : doublon dans Emby, même quand le thème de la série a été choisi à la main). Elle se choisit à la main si besoin.

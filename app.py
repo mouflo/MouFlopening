@@ -122,6 +122,13 @@ import diag
 diag.setup_logging()
 logger = logging.getLogger("mouflopening")
 auth.init_app(app, APP_VERSION)
+import comptes          # 👥 comptes « copain » (créés dans Réglages → Comptes)
+comptes.init_app(app, auth, BASE_DIR / "data")
+import copain_themes    # page /copain : génériques de l'admin (lecture seule) ou validés par la communauté
+copain_themes.init_app(app, ROOTS, library, find_theme, SOURCE, YOUTUBE, lambda: APP_VERSION)
+auth.COPAIN_OK = {("GET", "/"), ("GET", "/copain"), ("GET", "/api/copain/chercher"), ("GET", "/api/copain/theme"),
+                  ("POST", "/api/copain/communaute"), ("GET", "/api/moi"), ("POST", "/api/clientlog"), ("POST", "/api/copain/profil")}
+auth.COPAIN_PREFIXES = (("GET", "/api/copain/fichier/"),)
 
 _work_lock = threading.Lock()   # un seul téléchargement/conversion à la fois (ménage le NAS et le CPU)
 
@@ -595,6 +602,9 @@ def _run_normalize_inner():
 
 @app.route("/")
 def index():
+    if auth.role() == "copain":
+        from flask import redirect
+        return redirect("/copain")
     return render_template("index.html", version=APP_VERSION, target_db=f"{TARGET_DB:g}")
 
 
