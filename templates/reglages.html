@@ -16,7 +16,7 @@
     <div id="mou-header" data-app="mouflopening" data-prefix="MouFl" data-rest="opening" data-version="{{ version }}" data-sub="Réglages"></div>
     <a class="back" href="/">← Retour aux thèmes</a>
 
-    <div class="panel">
+    <div class="panel" data-onglet="Connexions">
         <h2>🎬 Emby</h2>
         <div class="sub">L'adresse de ton serveur Emby et sa clé API (Emby → Tableau de bord → Clés API).</div>
         <div class="field"><label for="embyHost">Adresse</label><input type="text" id="embyHost" placeholder="http://192.168.1.134:8096" autocapitalize="off" spellcheck="false"></div>
@@ -28,7 +28,7 @@
         <div id="embyKeyMsg"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" data-onglet="Connexions">
         <h2>🎞️ TheMovieDB</h2>
         <div class="sub">Sert à retrouver les titres originaux et les identifiants des films et séries (clé « API » de 32 caractères, ou « jeton d'accès » qui commence par eyJ).</div>
         <div class="state" id="tmdbKeyState"></div>
@@ -37,7 +37,7 @@
         <div id="tmdbKeyMsg"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" data-onglet="Général">
         <h2>🔊 Volume des thèmes</h2>
         <div class="sub">Chaque thème est ramené au même niveau (mesure ReplayGain / MP3Gain). 89 dB est la référence habituelle ; plus le nombre est élevé, plus les thèmes sonnent fort.</div>
         <div class="field" style="max-width:200px"><label for="dbValue">Niveau en dB (entre 70 et 100)</label><input type="text" inputmode="decimal" id="dbValue" autocomplete="off" placeholder="89"></div>
@@ -51,7 +51,7 @@
         <div id="trimMsg"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" data-onglet="Dossiers">
         <h2>📁 Dossiers</h2>
         <div class="sub">Le dossier qui contient tes médiathèques : chaque sous-dossier est proposé ci-dessous. Coche ceux à utiliser et indique ce qu'ils contiennent. Tu peux aussi ajouter des dossiers situés ailleurs. L'appli redémarre après l'enregistrement (quelques secondes).</div>
         <div class="field"><label for="pathParent">Dossier des médiathèques</label>
@@ -65,7 +65,7 @@
         <div id="pathsMsg"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" data-onglet="Connexions">
         <h2>🍪 Cookies YouTube <small style="color:var(--muted);font-weight:400">(facultatif)</small></h2>
         <div class="sub">Aide l'appli quand YouTube refuse un téléchargement (« connexion demandée », « vidéo non disponible depuis le serveur »). Ne contourne pas les blocages pour droits d'auteur. Utilise de préférence un compte YouTube secondaire, pas ton compte principal : YouTube peut restreindre un compte utilisé par un robot.</div>
         <details style="margin-bottom:10px"><summary style="cursor:pointer">Comment obtenir le fichier ?</summary>
@@ -81,7 +81,7 @@
         <div id="ckMsg"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" data-onglet="Général">
         <h2>🌙 Lot de nuit &amp; Telegram</h2>
         <div class="sub">Chaque nuit, l'appli cherche les thèmes manquants de tous les onglets (mêmes règles que le lot manuel), puis t'envoie un compte rendu sur Telegram s'il y a du nouveau.</div>
         <label class="check"><input type="checkbox" id="nightOn"> Activer le lot de nuit</label>
