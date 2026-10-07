@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.26.1] - 2026-10-07
+- Lot de nuit : la **saison 1** n'est plus jamais cherchée automatiquement (son générique est celui de la série : doublon dans Emby, même quand le thème de la série a été choisi à la main). Elle se choisit à la main si besoin.
+
 ## [0.26.0] - 2026-10-06
 - Alerte Telegram « redémarrage inattendu » : si l'appli a planté ou si le serveur a redémarré, un message part dès qu'elle repart (avec les dernières erreurs du journal en cas de plantage) ; case à cocher dans ⚙️ Réglages
 - Messages toujours visibles : quand un message apparaît hors de l'écran après un appui (en haut ou en bas de la page), il s'affiche aussi dans une bulle en bas de l'écran (kit commun `ui/mou-ui.js`)

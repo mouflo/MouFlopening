@@ -343,7 +343,9 @@ def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
         return {"kind": kind, "added": [], "failed": 0, "failures": [], "nas_error": bad}
     todo = [("film" if kind == "movie" else "série", title, folder, folder, None) for title, folder in library.missing_themes(roots)]
     if with_seasons and kind == "anime":          # films et séries : seul ThemerrDB est accepté, et il ne connaît pas les saisons
-        todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots)]
+        # La saison 1 n'est jamais cherchée automatiquement : elle aurait le même générique que la série (doublon dans Emby,
+        # même si le thème de la série a été choisi à la main et ne vient pas de la même source). À choisir à la main.
+        todo += [(f"saison {n}", title, folder, series, n) for title, n, folder, series in library.missing_season_themes(roots) if n >= 2]
     sk = skipped.all_keys(nightly.settings().get("retry_days", 30))     # au-delà de N jours, les titres mis de côté sont retentés
     n_all = len(todo)
     todo = [t for t in todo if str(t[2]) not in sk]          # les titres déjà recherchés sans résultat sont laissés de côté
