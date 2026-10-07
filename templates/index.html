@@ -350,7 +350,7 @@ function renderDetail() {
     refreshSkip();
     const customDone = r => {
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
-        if (!r.error) { $('cands').innerHTML = ''; $('customUrl').value = ''; $('customFile').value = ''; loadLibrary(true); }
+        if (!r.error) { $('cands').innerHTML = ''; $('customUrl').value = ''; $('customFile').value = ''; loadLibrary(true); proposerRetour(); }
         $('customUrlGo').disabled = $('customFileGo').disabled = false;
     };
     const customProgress = (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); };
@@ -419,7 +419,7 @@ async function startEdit(kind, arg) {
     if (!target || target.id !== tgt.id) return;        // on a changé de titre pendant la préparation
     note($('msg'), ''); stopPlayers(null);
     MouEditor.open({token: r.token, name: r.name, id: tgt.id, title: sel.title,
-        onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; loadLibrary(true); }});
+        onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; loadLibrary(true); proposerRetour(); }});
 }
 
 // Suppression d'un thème : deux validations successives (le fichier est mis de côté, pas détruit)
@@ -550,6 +550,7 @@ async function search(full) {
             document.querySelectorAll('.cand').forEach(c => c.classList.toggle('chosen', c.dataset.ai === b.dataset.a));
             $('cands').classList.add('collapsed');
             loadLibrary(true);
+            proposerRetour();
         }
     }));
     document.querySelectorAll('#cands button[data-edit]').forEach(b => b.addEventListener('click', () => {
@@ -619,18 +620,26 @@ $('batchStop').addEventListener('click', async () => { await post('/api/batch/st
 
 $('filterText').addEventListener('input', () => { listCollapsed = false; renderList(); });
 $('filterState').addEventListener('change', () => { listCollapsed = false; renderList(); });
-// Ouverture depuis MouFloster (« pas encore de générique ») : ?dossier=<chemin du titre>&retour=<adresse>
+// Ouverture depuis MouFloster ou MouFlanga : ?dossier=<chemin du titre>&de=<appli>&retour=<adresse>
+let venue = null;              // {appli, retour, id} : après la pose d'un générique pour ce titre, on propose d'y revenir
+function proposerRetour() {
+    if (!venue || !venue.retour || !target || (target.id !== venue.id && !target.id.startsWith(venue.id + '/')) || venue.demande) return;
+    venue.demande = true;
+    setTimeout(() => { if (confirm(`Générique en place 🎉\n\nRevenir à ${venue.appli} ?`)) location.href = venue.retour; }, 300);
+}
 async function ouvrirDepuisLien() {
     const q = new URLSearchParams(location.search), dossier = q.get('dossier');
     if (!dossier) return;
     const retour = /^https?:\/\//i.test(q.get('retour') || '') ? q.get('retour') : '';
+    const appli = ['MouFlanga', 'MouFloster'].includes(q.get('de')) ? q.get('de') : 'MouFloster';
     const fin = dossier.replace(/\/+$/, '').split('/').pop().toLowerCase();
     const it = items.find(i => i.chemin === dossier) || items.find(i => (i.name || '').toLowerCase() === fin);
     const b = $('venueBandeau');
     b.hidden = false;
-    b.innerHTML = it ? `🎵 Générique pour « ${esc(it.title || it.name)} » (envoyé par MouFloster).` : `Titre introuvable dans la médiathèque : ${esc(dossier)}`;
-    if (retour) b.innerHTML += ` <a href="${esc(retour)}" style="margin-left:8px;font-weight:600">↩ Retour à MouFloster</a>`;
+    b.innerHTML = it ? `🎵 Générique pour « ${esc(it.title || it.name)} » (envoyé par ${appli}).` : `Titre introuvable dans la médiathèque : ${esc(dossier)}`;
+    if (retour) b.innerHTML += ` <a href="${esc(retour)}" style="margin-left:8px;font-weight:600">↩ Retour à ${appli}</a>`;
     if (!it) return;
+    venue = {appli, retour, id: it.id};
     if (it.cat !== curCat) { curCat = it.cat; await loadLibrary(); }
     select(it.id);
 }

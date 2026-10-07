@@ -1,6 +1,7 @@
 # Changelog
 
 ## [0.26.1] - 2026-10-07
+- Ouverture depuis MouFlanga (`?dossier=…&de=MouFlanga&retour=…`) : bandeau « envoyé par MouFlanga » et, une fois le générique en place, question « Revenir à MouFlanga ? » (même chose pour MouFloster)
 - Lot de nuit : la **saison 1** n'est plus jamais cherchée automatiquement (son générique est celui de la série : doublon dans Emby, même quand le thème de la série a été choisi à la main). Elle se choisit à la main si besoin.
 
 ## [0.26.0] - 2026-10-06
