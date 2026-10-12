@@ -476,6 +476,11 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
                 if getattr(source, "api_error", False):
                     return False, f"{TRANSIENT}{source.name} ne répond pas pour le moment : sera retenté au prochain lot"
                 return False, f"aucun générique trouvé sur {source.name} pour « {query} »"
+            anime = (result.metadata or {}).get("anime") or ""
+            if number is not None and anime:           # saison : la fiche doit être CETTE série (pas « Dragon Ball Super » pour Dragon Ball)
+                from src.matching import saison_compatible
+                if not saison_compatible(title, anime):
+                    return False, f"AnimeThemes propose « {anime} », une autre série que « {title} » : à choisir à la main"
             if number is not None:                     # saison : jamais le même thème que la série ou une autre saison
                 from src import dupes
                 known = dupes.load_sources(SOURCES_FILE)
@@ -648,7 +653,9 @@ def api_library():
         it["cat"] = ROOT_CAT[root]
         it["chemin"] = str(base)                    # pour s'ouvrir directement sur ce titre depuis MouFloster (?dossier=…)
         it["origin"] = Path(ROOTS[root]).name      # dossier d'origine (utile quand un onglet regroupe Films HD et Films 4K)
-    cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": c["ok"], "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
+    # « ok » recalculé à chaque chargement : un partage pas encore monté au démarrage ne reste pas signalé ensuite
+    cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": all(Path(p).is_dir() for p in c["paths"]),
+             "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
     return jsonify({"items": items, "emby": EMBY.configured, "categories": cats})
 
 
@@ -1084,6 +1091,7 @@ def api_theme_delete():
     if find_theme(folder):
         return jsonify({"error": "Le thème n'a pas pu être supprimé (droits d'écriture ? détails : bouton Journal)"}), 500
     logger.info("Thème supprimé (mis de côté) : %s", folder)
+    skipped.add(folder, "supprimé à la main")       # le lot de nuit ne le remet pas tout seul (Dragon Ball saison 2)
     kind = kind_of(data.get("id", ""))
     emby = EMBY.refresh_series(series.name, library.clean_title(series.name), number, kind, series.parent.name)
     return jsonify({"ok": True, "message": f"Thème supprimé (l'ancien fichier est conservé dans le dossier des anciens thèmes). {emby['message']}"})
@@ -1312,6 +1320,8 @@ nightly_settings.init_app(app, BASE_DIR, nightly, lambda: threading.Thread(targe
 
 import redemarrage      # alerte Telegram après un plantage ou un redémarrage du serveur
 redemarrage.init_app(app, BASE_DIR)
+import redemarrer       # bouton « 🔄 Redémarrer l'appli » (fichier identique dans les quatre applis)
+redemarrer.init_app(app, lambda: ["téléchargement ou conversion d'un générique"] if _work_lock.locked() else [])
 import settings_page
 
 

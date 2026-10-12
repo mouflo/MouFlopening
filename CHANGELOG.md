@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2026-10-12
+- 🔄 Bouton **Redémarrer l'appli** dans ⚙️ Réglages → Général (commun aux quatre applis). Il prévient si un générique est en cours de téléchargement.
+- Le message « dossier de médiathèque introuvable » n'est plus figé : l'état des dossiers est revérifié à chaque chargement.
+- Saisons : une fiche AnimeThemes d'une autre série est refusée (« Dragon Ball Super » pour la saison 2 de Dragon Ball).
+- Un générique supprimé à la main est mis de côté : le lot de nuit ne le remet plus tout seul.
+
 ## [1.0.0] - 2026-10-07
 - 👥 **Comptes copains** (⚙️ Réglages → Comptes) : page « 🎵 Trouver un générique » rien que pour eux ; ils récupèrent les génériques déjà validés de l'admin (lecture seule) ou un générique validé par la communauté (ThemerrDB pour films et séries, AnimeThemes pour les animes). Jamais de recherche YouTube libre, jamais rien de modifié chez l'admin ; liens de téléchargement créés par le serveur
 - ⚙️ Réglages en onglets (Général · Dossiers · Connexions · Comptes), communs aux quatre applis
