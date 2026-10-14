@@ -1,5 +1,8 @@
 # Changelog
 
+## [Non publié] - 2026-10-14
+- Plus de bulles à répétition pendant un téléchargement : la progression (« Téléchargement depuis YouTube : 22 % »…) était recopiée en bulle en bas de l'écran à chaque mise à jour. Elle garde son aspect mais n'est plus prise pour un message à afficher en bulle ; les vrais résultats (réussite, erreur) s'affichent toujours en bulle.
+
 ## [1.0.1] - 2026-10-12
 - 🔄 Bouton **Redémarrer l'appli** dans ⚙️ Réglages → Général (commun aux quatre applis). Il prévient si un générique est en cours de téléchargement.
 - Le message « dossier de médiathèque introuvable » n'est plus figé : l'état des dossiers est revérifié à chaque chargement.

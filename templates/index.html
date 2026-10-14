@@ -101,6 +101,7 @@
     .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0; }
     .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
     .note.err { background:rgba(229,83,75,.15); border:1px solid var(--err); color:#ffb4ae; }
+    .prog-note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0; background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
     .note.warn { background:rgba(229,168,75,.15); border:1px solid var(--warn); color:#f3d9a8; }
     .list.collapsed { max-height:none; }
     .list.collapsed .row:not(.active) { display:none; }
@@ -224,6 +225,8 @@ function stepsHtml(steps, elapsed, done) {
     const cur = done ? '' : `<div class="stp cur"><span class="spin"></span>${esc(last ? last.text : 'Démarrage…')} <small>${Math.floor(elapsed)} s</small></div>`;
     return past + (done && last ? `<div class="stp done">✓ ${esc(last.text)}</div>` : cur);
 }
+// Progression en direct : même aspect qu'une note verte, mais pas la classe « note » (le kit en ferait une bulle à chaque mise à jour)
+function progHtml(steps, elapsed, done) { return `<div class="prog-note"><div class="steps" style="padding:0">${stepsHtml(steps, elapsed, done)}</div></div>`; }
 function note(el, text, kind) { el.innerHTML = text ? `<div class="note ${kind || 'ok'}">${esc(text)}</div>` : ''; }
 
 // ---------- liste ----------
@@ -353,7 +356,7 @@ function renderDetail() {
         if (!r.error) { $('cands').innerHTML = ''; $('customUrl').value = ''; $('customFile').value = ''; loadLibrary(true); proposerRetour(); }
         $('customUrlGo').disabled = $('customFileGo').disabled = false;
     };
-    const customProgress = (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); };
+    const customProgress = (steps, el, done) => { $('msg').innerHTML = `${progHtml(steps, el, done)}`; if (!done) ensureVisible($('msg')); };
     const customAsk = () => !target.has_theme || confirm('Ce titre a déjà un thème : il sera remplacé (l\'ancien est mis de côté, pas supprimé). Continuer ?');
     $('customUrlGo').addEventListener('click', async () => {
         const url = $('customUrl').value.trim(); if (!url) return note($('msg'), 'Colle d\'abord un lien.', 'err');
@@ -411,7 +414,7 @@ function refreshSkip() {
 async function startEdit(kind, arg) {
     if (!window.MouEditor) return note($('msg'), 'L\'éditeur n\'est pas chargé : recharge la page.', 'err');
     stopPlayers(null);                                  // la vidéo / le son en cours se coupe dès le début de l'édition
-    const progress = (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); };
+    const progress = (steps, el, done) => { $('msg').innerHTML = `${progHtml(steps, el, done)}`; if (!done) ensureVisible($('msg')); };
     let r; const tgt = target, sel = selected;          // l'édition reste attachée à ce titre
     if (kind === 'file') { const form = new FormData(); form.append('file', arg); form.append('id', tgt.id); r = await runJob('/api/edit/stage-file', form, progress); }
     else r = await runJob('/api/edit/stage', {id: tgt.id, source: kind, url: arg || ''}, progress);
@@ -469,7 +472,7 @@ async function loadBackups() {
         if (!confirm('Remettre ce thème en place ? Le thème actuel sera mis de côté (pas supprimé).')) return;
         $('bkList').querySelectorAll('button').forEach(x => x.disabled = true);
         const res = await runJob('/api/backups/restore', {id: tgt.id, name: b.dataset.restore, title: selected.title},
-            (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; });
+            (steps, el, done) => { $('msg').innerHTML = `${progHtml(steps, el, done)}`; });
         note($('msg'), res.message || res.error, res.error ? 'err' : (res.emby_ok ? 'ok' : 'warn'));
         await loadLibrary(true);
         if ($('bkBox') && $('bkBox').open) loadBackups();
@@ -535,7 +538,7 @@ async function search(full) {
         b.disabled = true; b.textContent = '…';
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = true);
         const r = await runJob('/api/save', {id: tgt.id, url: t.url || t.audio || t.video, title: sel.title, trusted: String(res[b.dataset.a].name).startsWith('★')},
-            (steps, el, done) => { $('msg').innerHTML = `<div class="note ok"><div class="steps" style="padding:0">${stepsHtml(steps, el, done)}</div></div>`; if (!done) ensureVisible($('msg')); });
+            (steps, el, done) => { $('msg').innerHTML = `${progHtml(steps, el, done)}`; if (!done) ensureVisible($('msg')); });
         document.querySelectorAll('#cands button[data-a]').forEach(x => x.disabled = false);
         b.textContent = 'Utiliser';
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
