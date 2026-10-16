@@ -151,7 +151,9 @@ def init_app(app, version, roots_fn, emby_state_fn, batch_state_fn):
     @app.route("/api/clientlog", methods=["POST"])
     def api_clientlog():
         data = request.get_json(silent=True) or {}
-        logger.error(f"[navigateur] {str(data.get('message', ''))[:400]} ({str(data.get('where', ''))[:200]})")
+        msg = " ".join(str(data.get("message", "")).split())[:400]      # une seule ligne : pas de fausses lignes dans le Journal
+        where = " ".join(str(data.get("where", "")).split())[:200]
+        logger.error(f"[navigateur] {msg} ({where})")
         return jsonify({"ok": True})
 
     @app.errorhandler(Exception)

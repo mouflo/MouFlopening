@@ -1,6 +1,7 @@
 # Changelog
 
-## [Non publié] - 2026-10-14
+## [Non publié] - 2026-10-16
+- 🔒 **Audit de sécurité des comptes copain** : un test essaie chaque adresse de l'appli avec un compte copain (seule sa page de génériques passe) et sans connexion (tout est refusé sauf la page de connexion). Identifiants « .. » ou commençant par « . » ou « _ » refusés ; une erreur envoyée par le navigateur ne peut plus fabriquer de fausses lignes dans le Journal.
 - Plus de bulles à répétition pendant un téléchargement : la progression (« Téléchargement depuis YouTube : 22 % »…) était recopiée en bulle en bas de l'écran à chaque mise à jour. Elle garde son aspect mais n'est plus prise pour un message à afficher en bulle ; les vrais résultats (réussite, erreur) s'affichent toujours en bulle.
 
 ## [1.0.1] - 2026-10-12
