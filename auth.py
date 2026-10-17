@@ -178,6 +178,10 @@ LOGIN_HTML = """<!DOCTYPE html>
             <label for="password">Mot de passe</label>
             <input type="password" id="password" name="password" autocomplete="current-password" required>
             <div class="remember">
+                <input type="checkbox" id="voirMdp" onchange="document.getElementById('password').type = this.checked ? 'text' : 'password'">
+                <label for="voirMdp" style="margin:0">Afficher le mot de passe</label>
+            </div>
+            <div class="remember">
                 <input type="checkbox" id="remember" name="remember" value="1" checked>
                 <label for="remember" style="margin:0">Rester connecté {{ days }} jours</label>
             </div>
