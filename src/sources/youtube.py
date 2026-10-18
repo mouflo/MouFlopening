@@ -276,8 +276,15 @@ def _friendly(err: str) -> str:
     e = err.lower()
     if "not available" in e or "unavailable" in e or "private video" in e or "removed" in e:
         return "YouTube refuse ce téléchargement depuis le serveur (la vidéo marche peut-être dans ton navigateur) : réessaie dans quelques minutes ou choisis-en une autre"
+    if "confirm your age" in e or "age-restricted" in e or "age restricted" in e or "inappropriate for some users" in e:
+        from src import ytcookies
+        if ytcookies.state().get("configured"):
+            return ("vidéo réservée aux adultes : YouTube refuse même avec les cookies enregistrés (sans doute expirés ou d'un compte "
+                    "sans l'âge requis). Exporte-les de nouveau depuis ton navigateur connecté, colle-les dans ⚙️ Réglages → Cookies YouTube, puis réessaie")
+        return ("vidéo réservée aux adultes : YouTube demande de confirmer l'âge. Colle les cookies de ton compte YouTube "
+                "(connecté dans ton navigateur) dans ⚙️ Réglages → Cookies YouTube, puis réessaie")
     if "sign in" in e or "age" in e and "restrict" in e:
-        return "YouTube demande une connexion pour cette vidéo : choisis-en une autre"
+        return "YouTube demande une connexion pour cette vidéo : colle les cookies de ton compte YouTube dans ⚙️ Réglages → Cookies YouTube, ou choisis-en une autre"
     if "claimed content" in e or "blocked" in e or "copyright" in e:
         return "YouTube bloque cette vidéo (droits d'auteur / pays) : impossible de la télécharger, cherche une autre version à la main"
     if "403" in e or "forbidden" in e:

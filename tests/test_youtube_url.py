@@ -16,3 +16,11 @@ class CanonicalUrl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MessageAgeTest(unittest.TestCase):
+    def test_video_reservee_aux_adultes_explique_les_cookies(self):
+        from src.sources.youtube import _friendly
+        m = _friendly("ERROR: [youtube] abc: Sign in to confirm your age. Use --cookies-from-browser or --cookies")
+        self.assertIn("réservée aux adultes", m)
+        self.assertIn("Cookies YouTube", m)
