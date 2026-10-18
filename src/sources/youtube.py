@@ -212,9 +212,12 @@ class YouTubeSource(BaseSource):
         except Exception:
             return 0
 
-    def download(self, url: str, output_path: Path, trusted: bool = False, any_url: bool = False) -> bool:
-        """trusted : vidéo choisie par la communauté (ThemerrDB) — on accepte une durée plus longue (25 min au lieu de 10)."""
+    def download(self, url: str, output_path: Path, trusted: bool = False, any_url: bool = False, max_minutes: int = 0) -> bool:
+        """trusted : vidéo choisie par la communauté (ThemerrDB) — on accepte une durée plus longue (25 min au lieu de 10).
+        max_minutes : durée permise pour un lien collé à la main (l'éditeur permet d'en découper le bon passage)."""
         md = max(self.max_duration, 1500) if trusted else self.max_duration
+        if max_minutes:
+            md = max(md, max_minutes * 60)
         self.last_error = ""
         if not any_url and not self.is_allowed_url(url):
             logger.error("[YouTube] Lien refusé : %s", url)

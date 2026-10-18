@@ -921,7 +921,7 @@ def _stage_work(item_id, kind_src, url=None, upload=None, upload_name=""):
                 src = Path(work) / "source.mp3"
                 source = SOURCE if SOURCE.is_allowed_url(url) else YOUTUBE
                 with _work_lock:
-                    ok = (YOUTUBE.download(YOUTUBE.canonical_url(url), src, trusted=True, any_url=True) if source is YOUTUBE
+                    ok = (YOUTUBE.download(YOUTUBE.canonical_url(url), src, trusted=True, any_url=True, max_minutes=60) if source is YOUTUBE
                           else source.download(url, src))
                 if not ok:
                     return {"error": "Téléchargement impossible : " + (getattr(source, "last_error", "") or "détails dans le Journal")}, 502

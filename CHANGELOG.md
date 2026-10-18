@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Non publié] - 2026-10-17
+- ✂️ **Lien collé à la main : jusqu'à 60 minutes** (avant 25) : on peut coller une bande originale entière et découper le bon passage dans l'éditeur.
 - 🍪 **Cookies YouTube en dernier recours** : avec des cookies périmés, YouTube ne donnait plus que des vignettes, même pour une vidéo normale, et tous les téléchargements échouaient. Ils sont maintenant essayés seulement après un refus (vidéo réservée aux adultes, connexion demandée…) ; une vidéo normale se télécharge toujours sans.
 - 🔞 Vidéo YouTube réservée aux adultes : le message dit maintenant quoi faire (coller les cookies de ton compte YouTube dans ⚙️ Réglages → Cookies YouTube) au lieu de « choisis-en une autre ».
 - 👁 Page de connexion : case « Afficher le mot de passe » pour voir ce qu'on tape.
