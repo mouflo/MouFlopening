@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Non publié] - 2026-10-17
+- 🍪 **Cookies YouTube en dernier recours** : avec des cookies périmés, YouTube ne donnait plus que des vignettes, même pour une vidéo normale, et tous les téléchargements échouaient. Ils sont maintenant essayés seulement après un refus (vidéo réservée aux adultes, connexion demandée…) ; une vidéo normale se télécharge toujours sans.
 - 🔞 Vidéo YouTube réservée aux adultes : le message dit maintenant quoi faire (coller les cookies de ton compte YouTube dans ⚙️ Réglages → Cookies YouTube) au lieu de « choisis-en une autre ».
 - 👁 Page de connexion : case « Afficher le mot de passe » pour voir ce qu'on tape.
 - 🔒 **Audit de sécurité des comptes copain** : un test essaie chaque adresse de l'appli avec un compte copain (seule sa page de génériques passe) et sans connexion (tout est refusé sauf la page de connexion). Identifiants « .. » ou commençant par « . » ou « _ » refusés ; une erreur envoyée par le navigateur ne peut plus fabriquer de fausses lignes dans le Journal.

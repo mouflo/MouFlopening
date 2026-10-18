@@ -174,14 +174,17 @@ class YouTubeSource(BaseSource):
 
     # ------------------------------------------------------------------ téléchargement
 
-    def _yt_download(self, url: str, tmp: str, clients=None, max_duration=None) -> str:
+    def _yt_download(self, url: str, tmp: str, clients=None, max_duration=None, cookies=False) -> str:
         """Télécharge l'audio dans tmp ; retourne « » si OK, sinon le message d'erreur.
-        clients : autres « profils » de lecteur YouTube à essayer quand le profil par défaut est refusé."""
+        clients : autres « profils » de lecteur YouTube à essayer quand le profil par défaut est refusé.
+        cookies : avec les cookies du compte YouTube enregistrés dans les Réglages, seulement en dernier recours : avec eux,
+        YouTube ne donne parfois plus que des vignettes (cookies périmés ou « tournés ») même pour une vidéo normale."""
         try:
             import yt_dlp
             opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout,
                     "format": "bestaudio/best", "outtmpl": str(Path(tmp) / "source.%(ext)s"),
-                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <=? {max_duration or self.max_duration}"), **ytcookies.opts()}
+                    "match_filter": yt_dlp.utils.match_filter_func(f"duration <=? {max_duration or self.max_duration}"),
+                    **(ytcookies.opts() if cookies else {})}
             def hook(d):
                 if d.get("status") == "downloading":
                     tot = d.get("total_bytes") or d.get("total_bytes_estimate")
@@ -204,7 +207,7 @@ class YouTubeSource(BaseSource):
         """Durée de la vidéo en secondes (0 si inconnue) : sert à expliquer un refus « trop longue »."""
         try:
             import yt_dlp
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout, **ytcookies.opts()}) as ydl:
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": self.timeout}) as ydl:
                 return int((ydl.extract_info(url, download=False) or {}).get("duration") or 0)
         except Exception:
             return 0
@@ -236,6 +239,15 @@ class YouTubeSource(BaseSource):
                         if not err:
                             YouTubeSource._good_clients = clients      # on s'en souvient pour les prochains téléchargements
                             break
+            if err and ytcookies.opts() and _looks_restricted(err):      # dernier recours : le compte YouTube des Réglages (vidéo réservée aux adultes…)
+                for clients in (None, ("tv", "web_safari")):
+                    logger.info("[YouTube] Nouvel essai avec les cookies du compte YouTube")
+                    say("YouTube a refusé : nouvel essai avec ton compte YouTube…")
+                    err2 = self._yt_download(url, tmp, clients, md, cookies=True)
+                    if not err2:
+                        err = ""
+                        break
+                    err = err2 if "age" in err2.lower() else err
             if err:
                 try:
                     import yt_dlp
@@ -292,6 +304,13 @@ def _friendly(err: str) -> str:
     if "duration" in e or "does not pass filter" in e:
         return "vidéo trop longue pour un thème : choisis-en une plus courte"
     return "téléchargement impossible (détails : bouton Journal)"
+
+
+def _looks_restricted(err: str) -> bool:
+    """Refus qu'un compte YouTube connecté peut lever (âge, connexion demandée, vidéo « non disponible » depuis le serveur)."""
+    e = err.lower()
+    return any(k in e for k in ("sign in", "confirm your age", "age-restricted", "age restricted", "not available", "unavailable",
+                                "requested format", "inappropriate for some users"))
 
 
 def _looks_outdated(err: str) -> bool:
