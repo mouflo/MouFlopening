@@ -122,6 +122,8 @@ import diag
 diag.setup_logging()
 logger = logging.getLogger("mouflopening")
 auth.init_app(app, APP_VERSION)
+import apparence
+apparence.init_app(app)     # skins et couleurs au choix, par compte
 import comptes          # 👥 comptes « copain » (créés dans Réglages → Comptes)
 comptes.init_app(app, auth, BASE_DIR / "data")
 import copain_themes    # page /copain : génériques de l'admin (lecture seule) ou validés par la communauté
@@ -129,6 +131,7 @@ copain_themes.init_app(app, ROOTS, library, find_theme, SOURCE, YOUTUBE, lambda:
 auth.COPAIN_OK = {("GET", "/"), ("GET", "/copain"), ("GET", "/api/copain/chercher"), ("GET", "/api/copain/theme"),
                   ("POST", "/api/copain/communaute"), ("GET", "/api/moi"), ("POST", "/api/clientlog"), ("POST", "/api/copain/profil")}
 auth.COPAIN_PREFIXES = (("GET", "/api/copain/fichier/"),)
+auth.COPAIN_OK |= {("GET", "/skin.css"), ("GET", "/api/apparence"), ("POST", "/api/apparence"), ("GET", "/apparence/reset")}
 
 _work_lock = threading.Lock()   # un seul téléchargement/conversion à la fois (ménage le NAS et le CPU)
 
