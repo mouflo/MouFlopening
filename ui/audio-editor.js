@@ -1,5 +1,6 @@
 /* MouFlopening · éditeur audio : courbe du son, zoom, curseurs de découpe, fondus.
    Utilisation : MouEditor.open({token, name, id, title, onSaved}) — la copie de travail est préparée par le serveur (/api/edit/…). */
+function couleurAccent() { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#52b54b'; }
 (function () {
   'use strict';
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); };
@@ -35,7 +36,7 @@
     '.aed .aed-fade{flex:1;text-align:center}.aed-fade .l{font-size:.78rem;color:var(--text2,#d0d0d0);margin-bottom:4px}' +
     '.aed .aed-fade .aed-pill{background:var(--bg,#101010);justify-content:center}' +
     '.aed .aed-fade input{width:44px;background:none;border:0;color:var(--text,#fff);text-align:center;font:inherit;font-size:1rem;padding:0}' +
-    '.aed .aed-msg{margin:6px 12px 0;padding:9px 12px;border-radius:8px;font-size:.88rem}.aed-msg.ok{background:rgba(82,181,75,.18);border:1px solid #52b54b}.aed-msg.err{background:rgba(229,83,75,.18);border:1px solid #e5534b}' +
+    '.aed .aed-msg{margin:6px 12px 0;padding:9px 12px;border-radius:8px;font-size:.88rem}.aed-msg.ok{background:color-mix(in srgb, var(--accent,#52b54b) 18%, transparent);border:1px solid var(--accent,#52b54b)}.aed-msg.err{background:rgba(229,83,75,.18);border:1px solid #e5534b}' +
     '@media(min-width:900px){.aed{height:min(100dvh,760px);margin:auto;border-radius:12px}}';
 
   function fmt(t) { t = Math.max(0, t); var m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); }
@@ -104,7 +105,7 @@
         for (var b = b0; b <= b1 && b * 2 < p.length; b++) { var a1 = Math.max(Math.abs(p[b * 2]), Math.abs(p[b * 2 + 1])); if (a1 > mx) mx = a1; }
         var h = Math.max(2, Math.min(1, (mx / 127) * gain) * amp);
         var inside = (x + 1) >= xs && (x + 1) <= xe;
-        ctx.fillStyle = inside ? '#52b54b' : '#4a4a4a';
+        ctx.fillStyle = inside ? couleurAccent() : '#4a4a4a';
         ctx.fillRect(x, mid - h, 2, h * 2);
       }
       // règle des temps (en haut)
@@ -121,7 +122,7 @@
       if (fi > 0) { ctx.beginPath(); ctx.moveTo(xs, H - bot); ctx.lineTo(xOf(S.start + fi), top + 6); ctx.stroke(); }
       if (fo > 0) { ctx.beginPath(); ctx.moveTo(xOf(S.end - fo), top + 6); ctx.lineTo(xe, H - bot); ctx.stroke(); }
       // poignées : trait + languette en bas
-      handle(xs, '#52b54b', -1); handle(xe, '#52b54b', 1);
+      handle(xs, couleurAccent(), -1); handle(xe, couleurAccent(), 1);
       // lecture
       var xh = xOf(S.head); if (xh >= 0 && xh <= W) { ctx.fillStyle = '#e5a84b'; ctx.fillRect(xh - 1, top, 2, H - top - bot); ctx.beginPath(); ctx.arc(xh, top, 5, 0, 6.3); ctx.fill(); }
       $('aedS').textContent = fmt(S.start); $('aedE').textContent = fmt(S.end); $('aedD').textContent = fmt(S.end - S.start);

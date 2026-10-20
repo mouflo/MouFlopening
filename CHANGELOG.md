@@ -1,5 +1,9 @@
 # Changelog
 
+## [Non publié] - 2026-10-20
+- 🎨 **Interface commune, version 2** (identique dans les cinq applis) : les fenêtres et les bulles de message suivent les couleurs du skin choisi, les fenêtres plus hautes que l'écran défilent avec leurs boutons collés en bas, la touche « retour » du téléphone ferme la fenêtre ouverte au lieu de quitter l'appli, et le **logo de l'en-tête et l'icône de l'onglet changent de couleur avec le skin**.
+- 🖌️ **Skins et couleurs au choix, par compte** (bouton 🎨 Apparence) : trois skins officiels, Violet cinéma, Océan et Papier, partagés par toutes les applis.
+
 ## [Non publié] - 2026-10-17
 - ✂️ **Lien collé à la main : jusqu'à 60 minutes** (avant 25) : on peut coller une bande originale entière et découper le bon passage dans l'éditeur.
 - 🍪 **Cookies YouTube en dernier recours** : avec des cookies périmés, YouTube ne donnait plus que des vignettes, même pour une vidéo normale, et tous les téléchargements échouaient. Ils sont maintenant essayés seulement après un refus (vidéo réservée aux adultes, connexion demandée…) ; une vidéo normale se télécharge toujours sans.

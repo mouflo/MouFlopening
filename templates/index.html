@@ -60,7 +60,7 @@
     .list { max-height:70vh; overflow-y:auto; }
     .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:4px; cursor:pointer; border:1px solid transparent; }
     .row:hover { background:var(--field); }
-    .row.active { background:#24331f; border-color:var(--accent); }
+    .row.active { background:color-mix(in srgb, var(--accent) 18%, var(--card)); border-color:var(--accent); }
     .row .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .pill { font-size:.72rem; padding:2px 8px; border-radius:10px; background:var(--field); color:var(--muted); white-space:nowrap; }
     .pill.ok { background:rgba(82,181,75,.18); color:#9bdc95; }
@@ -93,12 +93,12 @@
     .targets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
     .tabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:2px; }
     .tab { padding:9px 18px; border-radius:6px; background:var(--card); border:1px solid var(--line); color:var(--text); cursor:pointer; font-size:.95rem; white-space:nowrap; }
-    .tab.active { border-color:var(--accent); background:#24331f; font-weight:600; }
+    .tab.active { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 18%, var(--card)); font-weight:600; }
     .tab.bad { opacity:.5; }
     .ytplay { width:100%; max-width:420px; aspect-ratio:16/9; border:0; border-radius:4px; background:#000; }
     .chip { padding:6px 12px; border-radius:16px; background:var(--field); border:1px solid transparent; color:var(--text); cursor:pointer; font-size:.85rem; }
     .chip:hover { background:#383838; }
-    .chip.active { border-color:var(--accent); background:#24331f; }
+    .chip.active { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 18%, var(--card)); }
     .chip .tick { color:var(--accent); margin-left:4px; }
     .note { padding:10px 12px; border-radius:4px; font-size:.9rem; margin:10px 0; }
     .note.ok { background:rgba(82,181,75,.15); border:1px solid var(--accent); color:#c9efc5; }
