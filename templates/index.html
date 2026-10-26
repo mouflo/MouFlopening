@@ -299,10 +299,13 @@ function rowsCourantes() {
     const keep = i => st === 'all' ? true : st === 'done' ? i.has_theme : st === 'skipped' ? (i.skipped || (i.seasons || []).some(x => x.skipped)) : st === 'seasons' ? (i.seasons || []).some(x => !x.has_theme && !x.skipped && x.number > 0) : (!i.has_theme && !i.skipped);
     return catItems().filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
 }
-// ⏭ Titre suivant de la liste (après celui qui est ouvert), sans tourner en rond
+// ⏭ Titre suivant de la liste (après celui qui est ouvert), sans tourner en rond. La place se lit dans la liste complète de l'onglet :
+// un titre qui vient de recevoir son générique (ou « rien trouvé ») sort de la liste filtrée, et on doit quand même avancer, pas revenir
+// au premier titre sans générique laissé de côté plus haut.
 function prochainId() {
-    const rows = rowsCourantes(), i = selected ? rows.findIndex(r => r.id === selected.id) : -1;
-    const suivant = rows.slice(i + 1).find(r => !selected || r.id !== selected.id);
+    const tous = catItems(), place = new Map(tous.map((r, k) => [r.id, k]));
+    const ici = selected && place.has(selected.id) ? place.get(selected.id) : -1;
+    const suivant = rowsCourantes().find(r => place.get(r.id) > ici);
     return suivant ? suivant.id : null;
 }
 let enchainer = false;
