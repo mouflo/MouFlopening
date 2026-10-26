@@ -50,7 +50,7 @@
         .theme audio { grid-column:1 / -1; grid-row:2; width:100%; max-width:100%; min-width:0; }
         .theme .btn { justify-self:end; padding:10px 16px; }
         .cand h4 small { display:block; margin:2px 0 0; }
-        .chip { padding:9px 14px; }
+        .chip, .targets .chip, .targets .chip:hover { padding:9px 14px; }
         .row { padding:12px; }
     }
     .filters { display:flex; gap:8px; margin-bottom:10px; }
@@ -95,6 +95,14 @@
     .tab { padding:9px 18px; border-radius:6px; background:var(--card); border:1px solid var(--line); color:var(--text); cursor:pointer; font-size:.95rem; white-space:nowrap; }
     .tab.active { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 18%, var(--card)); font-weight:600; }
     .tab.bad { opacity:.5; }
+    /* le kit commun colore tous les boutons (body.mou-skin button) : onglets et puces gardent ici leur propre style */
+    .tabs .tab, .tabs .tab:hover { background:var(--card); color:var(--text); font-weight:500; padding:9px 18px; border:1px solid var(--line); }
+    .tabs .tab.active, .tabs .tab.active:hover { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700; }
+    .targets .chip, .targets .chip:hover { background:var(--field); color:var(--text); font-weight:500; padding:6px 12px; border:1px solid transparent; border-radius:16px; }
+    .targets .chip.active, .targets .chip.active:hover { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+    .targets .chip.active .tick { color:#fff; }
+    .tete-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .enchainer { margin-top:10px; }
     .ytplay { width:100%; max-width:420px; aspect-ratio:16/9; border:0; border-radius:4px; background:#000; }
     .chip { padding:6px 12px; border-radius:16px; background:var(--field); border:1px solid transparent; color:var(--text); cursor:pointer; font-size:.85rem; }
     .chip:hover { background:#383838; }
@@ -177,7 +185,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let items = [], cats = [], curCat = 0, selected = null, emby = false, listCollapsed = false;
+let items = [], cats = [], curCat = 0, selected = null, emby = false, listCollapsed = false, moufloster = false;
 try { curCat = parseInt(localStorage.getItem('mf_cat') || '0') || 0; } catch (e) {}
 const catKind = () => (cats[curCat] || {}).kind || 'anime';
 const sourceName = () => catKind() === 'anime' ? 'AnimeThemes' : 'YouTube';
@@ -236,7 +244,7 @@ function note(el, text, kind) { el.innerHTML = text ? `<div class="note ${kind |
 async function loadLibrary(keepSelection) {
     const data = await api('/api/library');
     items = data.items || [];
-    emby = data.emby;
+    emby = data.emby; moufloster = !!data.moufloster;
     cats = data.categories || [];
     if (curCat >= cats.length) curCat = 0;
     renderTabs();
@@ -285,10 +293,52 @@ function switchCat(i) {
     loadLibrary();
 }
 
-function renderList() {
+// Titres de la liste telle qu'elle est affichée (onglet, filtre, texte tapé)
+function rowsCourantes() {
     const q = $('filterText').value.trim().toLowerCase(), st = $('filterState').value;
     const keep = i => st === 'all' ? true : st === 'done' ? i.has_theme : st === 'skipped' ? (i.skipped || (i.seasons || []).some(x => x.skipped)) : st === 'seasons' ? (i.seasons || []).some(x => !x.has_theme && !x.skipped && x.number > 0) : (!i.has_theme && !i.skipped);
-    const rows = catItems().filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
+    return catItems().filter(i => keep(i) && (!q || i.name.toLowerCase().includes(q)));
+}
+// ⏭ Titre suivant de la liste (après celui qui est ouvert), sans tourner en rond
+function prochainId() {
+    const rows = rowsCourantes(), i = selected ? rows.findIndex(r => r.id === selected.id) : -1;
+    const suivant = rows.slice(i + 1).find(r => !selected || r.id !== selected.id);
+    return suivant ? suivant.id : null;
+}
+let enchainer = false;
+try { enchainer = localStorage.getItem('mf_enchainer') === '1'; } catch (x) {}
+// Générique posé : liste relue, retour proposé à l'appli d'origine ; en mode « Enchaîner », titre suivant au bout d'un instant
+function apresPose() {
+    const suivant = enchainer && !(venue && venue.retour) ? prochainId() : null, avant = selected && selected.id;
+    loadLibrary(true).then(() => {
+        if (!suivant) return;
+        setTimeout(() => {
+            if (!selected || selected.id !== avant || currentJob) return;     // on a déjà changé de titre entre-temps
+            select(suivant);
+            if ($('filterState').value === 'seasons') {                         // filtre « saisons » : directement la saison à faire
+                const t = targetsOf(selected).find(x => x.number > 0 && !x.has_theme && !x.skipped);
+                if (t) switchTarget(t.id);
+            }
+        }, 1500);
+    });
+    proposerRetour();
+}
+// 🖼️ Poster dans MouFloster : il s'ouvre sur ce titre (et cette saison), avec un lien pour revenir ici
+async function ouvrirMoufloster() {
+    const tgt = target, sel = selected;
+    const r = await api('/api/moufloster/lien?id=' + encodeURIComponent(tgt.id));
+    if (r.error) return note($('msg'), r.error, 'err');
+    const h = location.hostname;
+    const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h) || /\.(local|lan|home)$/.test(h);
+    let base = (local ? (r.url || r.url_externe) : (r.url_externe || r.url)) || (r.ici && local ? location.protocol + '//' + h + ':' + r.port : '');
+    if (!base) return note($('msg'), 'Adresse de MouFloster inconnue : règle-la dans ⚙️ Réglages → Connexions.', 'warn');
+    const retour = location.origin + location.pathname + '?dossier=' + encodeURIComponent(sel.chemin) + '&revenu=MouFloster';
+    location.href = base.replace(/\/$/, '') + '/?de=MouFlopening&q=' + encodeURIComponent(r.titre) + (r.tmdb ? '&tmdb=' + r.tmdb : '')
+        + '&type=' + r.type + (r.saison !== null && r.saison !== undefined ? '&saison=' + r.saison : '') + '&retour=' + encodeURIComponent(retour);
+}
+
+function renderList() {
+    const rows = rowsCourantes();
     $('list').classList.toggle('collapsed', listCollapsed && !!selected && rows.some(i => i.id === selected.id));
     $('list').innerHTML = rows.length ? rows.map(i =>
         `<div class="row${selected && selected.id === i.id ? ' active' : ''}" data-id="${esc(i.id)}">
@@ -330,7 +380,8 @@ function renderDetail() {
         <div class="detail-tete">
             <img class="detail-poster" id="detailPoster" alt="" src="/api/poster?id=${encodeURIComponent(target.id)}" onerror="this.style.display='none'" onload="this.style.display=''">
             <div><h2>${esc(selected.title || selected.name)}</h2>
-            <div class="path">${esc(selected.name)}</div></div>
+            <div class="path">${esc(selected.name)}</div>
+            <div class="tete-actions">${moufloster ? '<button type="button" class="btn ghost small" id="btnPoster">🖼️ Poster dans MouFloster</button>' : ''}<button type="button" class="btn ghost small" id="btnSuivant" title="Titre suivant de la liste, sans rien enregistrer">⏭ Titre suivant</button></div></div>
         </div>
         <div class="targets" id="targets"></div>
         <div id="current"></div>
@@ -348,6 +399,7 @@ function renderDetail() {
             <div class="search-row"><input type="file" id="customFile" accept="audio/*,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma"><button class="btn" id="customFileGo">Envoyer ce fichier</button><button class="btn ghost" id="customFileEdit">✂️ Éditer d'abord</button></div>
         </details>
         <label class="opt"><input type="checkbox" id="optOrig" ${origOn ? 'checked' : ''}> Chercher aussi sous le titre original (d'après Emby)</label>
+        <label class="opt enchainer"><input type="checkbox" id="optEnchainer" ${enchainer ? 'checked' : ''}> ⏭ Enchaîner : une fois le générique posé, passer tout seul au titre suivant de la liste</label>
         <div id="msg"></div>
         <div id="cands"></div>`;
     renderTargets(); refreshCurrent();
@@ -356,7 +408,7 @@ function renderDetail() {
     refreshSkip();
     const customDone = r => {
         note($('msg'), r.message || r.error, r.error ? 'err' : (r.emby_ok ? 'ok' : 'warn'));
-        if (!r.error) { $('cands').innerHTML = ''; $('customUrl').value = ''; $('customFile').value = ''; loadLibrary(true); proposerRetour(); }
+        if (!r.error) { $('cands').innerHTML = ''; $('customUrl').value = ''; $('customFile').value = ''; apresPose(); }
         $('customUrlGo').disabled = $('customFileGo').disabled = false;
     };
     const customProgress = (steps, el, done) => { $('msg').innerHTML = `${progHtml(steps, el, done)}`; if (!done) ensureVisible($('msg')); };
@@ -378,6 +430,9 @@ function renderDetail() {
         customDone(await runJob('/api/custom/file', form, customProgress));
     });
     $('optOrig').addEventListener('change', e => { origOn = e.target.checked; try { localStorage.setItem('mf_orig', origOn ? '1' : '0'); } catch (x) {} });
+    $('optEnchainer').addEventListener('change', e => { enchainer = e.target.checked; try { localStorage.setItem('mf_enchainer', enchainer ? '1' : '0'); } catch (x) {} });
+    $('btnSuivant').addEventListener('click', () => { const s = prochainId(); if (s) select(s); else note($('msg'), 'C\'est le dernier titre de la liste.', 'ok'); });
+    if ($('btnPoster')) $('btnPoster').addEventListener('click', ouvrirMoufloster);
     $('q').addEventListener('keydown', e => { if (e.key === 'Enter') search(true); });
     if (!target.has_theme && !target.skipped) search();
 }
@@ -425,7 +480,7 @@ async function startEdit(kind, arg) {
     if (!target || target.id !== tgt.id) return;        // on a changé de titre pendant la préparation
     note($('msg'), ''); stopPlayers(null);
     MouEditor.open({token: r.token, name: r.name, id: tgt.id, title: sel.title,
-        onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; loadLibrary(true); proposerRetour(); }});
+        onSaved: res => { note($('msg'), res.message, res.emby_ok ? 'ok' : 'warn'); $('cands').innerHTML = ''; apresPose(); }});
 }
 
 // Suppression d'un thème : deux validations successives (le fichier est mis de côté, pas détruit)
@@ -555,8 +610,7 @@ async function search(full) {
         if (!r.error) {
             document.querySelectorAll('.cand').forEach(c => c.classList.toggle('chosen', c.dataset.ai === b.dataset.a));
             $('cands').classList.add('collapsed');
-            loadLibrary(true);
-            proposerRetour();
+            apresPose();
         }
     }));
     document.querySelectorAll('#cands button[data-edit]').forEach(b => b.addEventListener('click', () => {
@@ -642,6 +696,14 @@ async function ouvrirDepuisLien() {
     const it = items.find(i => i.chemin === dossier) || items.find(i => (i.name || '').toLowerCase() === fin);
     const b = $('venueBandeau');
     b.hidden = false;
+    if (q.get('revenu') === 'MouFloster') {                // retour après « 🖼️ Poster dans MouFloster »
+        history.replaceState(null, '', location.pathname);
+        b.textContent = it ? `🖼️ De retour de MouFloster : « ${it.title || it.name} ».` : 'De retour de MouFloster.';
+        if (!it) return;
+        if (it.cat !== curCat) { curCat = it.cat; await loadLibrary(); }
+        select(it.id);
+        return;
+    }
     b.innerHTML = it ? `🎵 Générique pour « ${esc(it.title || it.name)} » (envoyé par ${appli}).` : `Titre introuvable dans la médiathèque : ${esc(dossier)}`;
     if (retour) b.innerHTML += ` <a href="${esc(retour)}" style="margin-left:8px;font-weight:600">↩ Retour à ${appli}</a>`;
     if (!it) return;

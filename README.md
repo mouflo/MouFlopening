@@ -21,7 +21,7 @@
 
 ![La recherche annonce chaque étape en direct (titre original, ThemerrDB, YouTube…)](docs/screenshots/progression.png)
 
-**La page ⚙️ Réglages : Emby, TheMovieDB, volume, dossiers, cookies YouTube, lot de nuit et Telegram**
+**La page ⚙️ Réglages → Connexions : Emby, TheMovieDB, MouFloster, applis voisines, cookies YouTube**
 
 ![La page Réglages](docs/screenshots/reglages.png)
 
@@ -33,7 +33,7 @@
 
 ![Les anciens thèmes d'un titre](docs/screenshots/anciens.png)
 
-**Sur téléphone**
+**Sur téléphone : la fiche d'un titre, avec « 🖼️ Poster dans MouFloster », « ⏭ Titre suivant » et l'enchaînement**
 
 ![Sur téléphone](docs/screenshots/mobile.png)
 
@@ -45,7 +45,10 @@
 - 🎵 **Plusieurs sources** : AnimeThemes (génériques d'animes), ThemerrDB (thèmes validés par la communauté pour les films et séries) et YouTube
 - 🎯 **Recherche soignée** : titre original d'après Emby et TheMovieDB, vérification des saisons d'animes, jamais le même thème pour une série et sa saison 1
 - 📚 **Traitement par lots** : télécharge d'un coup tous les thèmes manquants, avec progression en direct et possibilité d'arrêter
-- 🌙 **Lot de nuit** : l'appli cherche toute seule les thèmes manquants à l'heure choisie, puis envoie un compte rendu sur Telegram (thèmes ajoutés, et titres sans thème regroupés par raison)
+- 🌙 **Lot de nuit** : l'appli cherche toute seule les thèmes manquants à l'heure choisie, puis envoie un compte rendu sur Telegram seulement s'il y a du nouveau : titres arrivés dans Emby (générique posé cette nuit, déjà là ou à chercher, et poster à faire d'après MouFloster), thèmes ajoutés, et seulement les nouveaux titres sans thème (les autres tiennent en une ligne « toujours sans thème »). Un film ou une série absent de ThemerrDB n'est revérifié qu'une fois par semaine ; une panne de ThemerrDB ou de TheMovieDB est retentée la nuit suivante
+- ⏭ **Enchaîner** : une fois le générique posé, l'appli peut passer toute seule au titre suivant de la liste (case « Enchaîner »), recherche déjà lancée ; « ⏭ Titre suivant » passe au suivant sans rien enregistrer
+- 🖼️ **Avec MouFloster** : « 🖼️ Poster dans MouFloster » ouvre MouFloster sur le titre (et la saison) avec un lien pour revenir ; après l'envoi d'un poster dans MouFloster, MouFlopening cherche lui-même le générique validé du titre
+- 🔗 **Applis voisines** : sur le même serveur, les applis MouFl se parlent directement (clé créée toute seule, rien à régler) ; ⚙️ Réglages → Connexions → « 📥 Reprendre les réglages de » copie Emby, TheMovieDB ou Telegram d'une autre appli au lieu de les retaper
 - 🔊 **Volume homogène** : chaque thème est ramené au même niveau (89 dB par défaut, réglable)
 - ✂️ **Éditeur audio** : coupe le début et la fin, zoom sur la courbe, fondus d'entrée et de sortie
 - 🎶 **Ton propre thème** : colle un lien (YouTube ou autre) ou envoie un fichier audio
@@ -56,11 +59,12 @@
 - 🛡️ **NAS vérifié avant chaque lot** : si le partage réseau n'est pas monté, rien n'est touché et Telegram prévient
 - ⚙️ **Page Réglages** : adresse et clé d'Emby, clé TheMovieDB, volume, dossiers (avec explorateur), cookies YouTube, lot de nuit et Telegram, sans toucher à un fichier
 - 🩺 **Journal et diagnostic** : un bouton pour copier l'état du serveur quand quelque chose ne va pas
-- 📱 **Pensée pour le téléphone**, mises à jour automatiques de yt-dlp
+- 📱 **Pensée pour le téléphone** (liste compressée : dix fois moins de données à chaque rechargement), mises à jour automatiques de yt-dlp
+- 🧰 **Installable chez d'autres** : `install.sh` installe les paquets (python3-venv, ffmpeg…), le service et la mise à jour automatique (chaque nuit, chaque heure, chaque minute ou jamais) ; l'identifiant se crée à la première ouverture de la page depuis le réseau local ; aucune valeur propre à une maison par défaut
 
 ## 🚀 Installation
 
-Tout est expliqué dans [`INSTALL.md`](INSTALL.md) : installation sur un conteneur Proxmox/LXC, mises à jour automatiques depuis GitHub (cronjob chaque minute) et reconstruction complète après une panne.
+Tout est expliqué dans [`INSTALL.md`](INSTALL.md) : installation sur un conteneur Proxmox/LXC, mises à jour automatiques depuis GitHub (fréquence au choix) et reconstruction complète après une panne.
 
 En bref :
 
@@ -71,7 +75,7 @@ cd mouflopening
 bash install.sh
 ```
 
-Ouvre ensuite `http://<adresse-du-serveur>:8001`, puis la page **⚙️ Réglages** pour indiquer Emby, la clé TheMovieDB et tes dossiers. Les clés restent sur ton serveur (`data/secrets.env`), jamais sur GitHub.
+Ouvre ensuite `http://<adresse-du-serveur>:8001` depuis ton réseau local (l'identifiant se crée à la première ouverture), puis la page **⚙️ Réglages** pour indiquer Emby, la clé TheMovieDB et tes dossiers (ou les reprendre d'une appli MouFl voisine). Les clés restent sur ton serveur (`data/secrets.env`), jamais sur GitHub.
 
 ## 📖 Utilisation
 

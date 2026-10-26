@@ -62,15 +62,27 @@
         <h2>📁 Dossiers</h2>
         <div class="sub">Le dossier qui contient tes médiathèques : chaque sous-dossier est proposé ci-dessous. Coche ceux à utiliser et indique ce qu'ils contiennent. Tu peux aussi ajouter des dossiers situés ailleurs. L'appli redémarre après l'enregistrement (quelques secondes).</div>
         <div class="field"><label for="pathParent">Dossier des médiathèques</label>
-            <div class="row nowrap"><input type="text" id="pathParent" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/Emby-Media"><button class="btn ghost" data-browse="pathParent">📂 Parcourir</button><button class="btn ghost" id="pathRescan" title="Relire les sous-dossiers">↻</button></div></div>
+            <div class="row nowrap"><input type="text" id="pathParent" autocapitalize="off" spellcheck="false" placeholder="/mnt/nas/Emby-Media"><button class="btn ghost" data-browse="pathParent">📂 Parcourir</button><button class="btn ghost" id="pathRescan" title="Relire les sous-dossiers">↻</button></div></div>
         <div id="folderList"></div>
         <div class="row" style="margin-bottom:12px"><button class="btn ghost" id="folderAdd">➕ Ajouter un dossier</button></div>
         <div class="field"><label for="pathBackup">Dossier des anciens thèmes (thèmes remplacés, jamais supprimés)</label>
-            <div class="row nowrap"><input type="text" id="pathBackup" autocapitalize="off" spellcheck="false" placeholder="/mnt/mouflosyno/MouFlopening/Anciens thèmes"><button class="btn ghost" data-browse="pathBackup">📂 Parcourir</button></div></div>
+            <div class="row nowrap"><input type="text" id="pathBackup" autocapitalize="off" spellcheck="false" placeholder="/mnt/nas/MouFlopening/Anciens thèmes"><button class="btn ghost" data-browse="pathBackup">📂 Parcourir</button></div></div>
         <div class="tabsinfo" id="tabsInfo"></div>
         <div class="row" style="margin-top:12px"><button class="btn" id="pathsSave">Enregistrer et redémarrer</button></div>
         <div id="pathsMsg"></div>
     </div>
+
+    <div class="panel" data-onglet="Connexions">
+        <h2>🖼️ MouFloster (posters)</h2>
+        <div class="sub">Sur la fiche d'un titre, le bouton « 🖼️ Poster dans MouFloster » l'ouvre directement sur ce titre (et cette saison), avec un lien pour revenir. Chaque nuit, le compte rendu Telegram dit aussi quels nouveaux titres attendent leur poster. Les adresses servent aux liens : l'appli prend l'adresse locale quand tu es chez toi, l'adresse perso sinon. Si MouFloster est sur ce serveur et que rien n'est rempli, son adresse est devinée.</div>
+        <div class="state" id="mfsEtat"></div>
+        <div class="field"><label for="mfsUrl">Adresse de MouFloster sur le réseau local</label><input type="text" id="mfsUrl" placeholder="http://192.168.1.10:8000" autocapitalize="off" spellcheck="false"></div>
+        <div class="field"><label for="mfsUrlExt">Adresse perso de MouFloster (depuis l'extérieur, facultatif)</label><input type="text" id="mfsUrlExt" placeholder="https://moufloster.mondomaine.fr" autocapitalize="off" spellcheck="false"></div>
+        <div class="row"><button class="btn" id="mfsSave">Enregistrer les adresses</button></div>
+        <div id="mfsMsg"></div>
+    </div>
+
+    <div class="panel" data-onglet="Connexions" id="voisinesPanel"></div>
 
     <div class="panel" data-onglet="Connexions">
         <h2>🍪 Cookies YouTube <small style="color:var(--muted);font-weight:400">(facultatif)</small></h2>
@@ -243,6 +255,17 @@ $('usrListe').addEventListener('click', async e => {
     const r = await post('/api/utilisateurs', corps); say('usrMsg', r.message || r.error, r.ok); loadUsr();
 });
 loadUsr();
+
+// ---------- 🖼️ MouFloster ----------
+async function loadMoufloster() {
+    const r = await api('/api/settings/voisines'), v = (r.voisines || []).find(x => x.id === 'moufloster') || {};
+    $('mfsUrl').value = v.url || ''; $('mfsUrlExt').value = v.url_externe || '';
+    $('mfsEtat').textContent = v.reliee ? (v.ici ? '✅ MouFloster est sur ce serveur : relié tout seul.' : '✅ Relié à MouFloster (autre machine).')
+        : 'MouFloster n’est pas relié : le bouton s’affiche si une adresse est remplie (sa clé : 🔗 Applis voisines).';
+}
+simpleSave('mfsSave', 'mfsMsg', '/api/settings/voisines', () => ({action: 'adresses', app: 'moufloster', url: $('mfsUrl').value, url_externe: $('mfsUrlExt').value}), loadMoufloster);
+loadMoufloster();
 </script>
+<script src="/ui/voisins.js?v={{ version|urlencode }}"></script>
 </body>
 </html>

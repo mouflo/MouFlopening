@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"^\d{6,}:[A-Za-z0-9_-]{30,}$")
 _CHAT_RE = re.compile(r"^(-?\d{3,20}|@[A-Za-z0-9_]{4,64})$")
-_FALLBACK = Path("/opt/mouflanimexer/telegram_config.json")
+_FALLBACK = Path(__file__).resolve().parent.parent.parent / "mouflanimexer" / "telegram_config.json"   # MouFlanimeXer installé à côté
 _JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 _MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
 _ICON = {"movie": "🎬", "series": "📺", "anime": "🎌"}
@@ -46,7 +46,9 @@ def settings():
         d = {}
     return {"enabled": bool(d.get("enabled", False)), "hour": min(23, max(0, int(d.get("hour", 3)))),
             "seasons": bool(d.get("seasons", True)), "last_run": d.get("last_run", ""), "last_summary": d.get("last_summary", ""),
-            "retry_days": max(0, int(d.get("retry_days", 30) or 0))}
+            "retry_days": max(0, int(d.get("retry_days", 30) or 0)),
+            "signales": [str(x) for x in d.get("signales") or [] if x],          # titres sans thème déjà signalés sur Telegram
+            "dernier_rapport": str(d.get("dernier_rapport") or "")}              # heure (UTC) du dernier compte rendu
 
 
 def save(**changes):
@@ -180,20 +182,42 @@ def reason_group(message):
     return "❓ autre raison (voir le Journal)"
 
 
-def format_report(by_cat, seconds, now=None):
-    """by_cat : [{"kind": "movie|series|anime", "added": [titres], "failed": n, "failures": [(titre, raison)], "nas_error": "..."}]
-    -> texte du message, ou None s'il n'y a vraiment rien à dire."""
+def format_report(by_cat, seconds, now=None, deja=None, arrivees=None):
+    """by_cat : [{"kind": "movie|series|anime", "added": [titres], "failed": n, "failures": [(titre, raison, dossier)], "nas_error": "..."}]
+    deja : dossiers déjà signalés sans thème les nuits précédentes (on ne les détaille plus : une ligne « toujours sans thème ») ;
+    arrivees : {"lignes": [...], "total": n, "posters": n, "lien": "..."} (titres arrivés dans Emby, avec générique et poster).
+    -> texte du message, ou None s'il n'y a rien de nouveau à dire."""
     now = now or datetime.now()
+    deja = set(deja or ())
     added = sum(len(c["added"]) for c in by_cat)
-    failed = sum(c["failed"] for c in by_cat)
     nas = list(dict.fromkeys(p for c in by_cat if c.get("nas_error") for p in c["nas_error"].split(", ")))   # chaque dossier une fois
-    if not added and not failed and not nas:
+    nouveaux, anciens = [], 0
+    for c in by_cat:
+        if "failures" not in c:                  # ancien format : pas le détail, tout compte comme nouveau
+            nouveaux += [("", "")] * c.get("failed", 0)
+            continue
+        for f in c.get("failures") or []:
+            if (f[2] if len(f) > 2 else f[0]) in deja:
+                anciens += 1
+            else:
+                nouveaux.append((f[0], f[1]))
+    lignes_arrivees = (arrivees or {}).get("lignes") or []
+    if not added and not nouveaux and not nas and not lignes_arrivees:
         return None
     mins = max(1, round(seconds / 60))
     lines = ["🌙 MouFlopening — compte rendu de la nuit",
              f"📅 {_JOURS[now.weekday()]} {now.day} {_MOIS[now.month - 1]} · ⏱️ {mins} min", ""]
     if nas:
         lines += ["⚠️ Partage réseau inaccessible : " + ", ".join(nas), "   Rien n'a été touché dans ces dossiers. Le NAS est-il bien monté ?", ""]
+    if lignes_arrivees:
+        total = arrivees.get("total") or len(lignes_arrivees)
+        lines.append(f"🆕 Arrivés dans Emby : {total}")
+        lines += lignes_arrivees
+        if total > len(lignes_arrivees):
+            lines.append(f"  … et {total - len(lignes_arrivees)} autres")
+        if arrivees.get("posters"):
+            lines.append(f"🖼️ {_plural(arrivees['posters'], 'poster', 'posters')} à faire dans MouFloster" + (f" : {arrivees['lien']}" if arrivees.get("lien") else ""))
+        lines.append("")
     for c in by_cat:
         if not c["added"]:
             continue
@@ -205,17 +229,19 @@ def format_report(by_cat, seconds, now=None):
         lines.append("")
     if added:
         lines.append(f"🎶 {_plural(added, 'nouveau thème', 'nouveaux thèmes')} dans Emby" + (" 🎉" if added >= 5 else ""))
-    if failed:
-        lines.append(f"🔍 {_plural(failed, 'titre', 'titres')} sans thème validé : à chercher à la main")
+    if nouveaux:
+        lines.append(f"🔍 {_plural(len(nouveaux), 'titre', 'titres')} sans thème validé : à chercher à la main")
         groups = {}
-        for c in by_cat:
-            for title, why in c.get("failures") or []:
+        for title, why in nouveaux:
+            if title:
                 groups.setdefault(reason_group(why), []).append(title)
         for label, titles in sorted(groups.items(), key=lambda g: -len(g[1])):
             more = f" … (+{len(titles) - 4})" if len(titles) > 4 else ""
             lines.append(f"  {label} : {len(titles)}")
             lines.append("     " + ", ".join(titles[:4]) + more)
-    text = "\n".join(lines)
+    if anciens:
+        lines.append(f"📋 {_plural(anciens, 'titre', 'titres')} toujours sans thème (déjà signalés, à chercher à la main)")
+    text = "\n".join(lines).rstrip()
     return text if len(text) <= 4000 else text[:3990] + "\n…"
 
 

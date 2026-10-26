@@ -1,8 +1,8 @@
 #!/bin/bash
-# Déploiement automatique de MouFlopening (lancé par cron chaque minute)
+# Déploiement automatique de MouFlopening (lancé par cron, fréquence choisie à l'installation : setup-cronjob.sh)
 # Même méthode que MouFloster et MouFlanimeXer : git fetch, reset si nouveau commit, redémarrage du service.
 
-REPO_DIR="/opt/mouflopening"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="/var/log/mouflopening-deploy.log"
 SERVICE_NAME="mouflopening"
 
@@ -43,7 +43,7 @@ fi
 
 # Identifiants et clé Emby : repris de MouFloster au premier déploiement (même compte, rien à retaper).
 # Seules les clés absentes sont copiées ; les valeurs ne sont jamais écrites dans le journal.
-SRC_SECRETS="/opt/moufloster/data/secrets.env"
+SRC_SECRETS="$(dirname "$REPO_DIR")/moufloster/data/secrets.env"      # MouFloster installé à côté
 DST_SECRETS="$REPO_DIR/data/secrets.env"
 if [ -f "$SRC_SECRETS" ]; then
     mkdir -p "$REPO_DIR/data"
@@ -60,8 +60,9 @@ if [ -f "$SRC_SECRETS" ]; then
 fi
 
 # Service systemd : le fichier du dépôt est la source de vérité
-if ! cmp -s "$REPO_DIR/mouflopening.service" /etc/systemd/system/mouflopening.service; then
-    cp "$REPO_DIR/mouflopening.service" /etc/systemd/system/mouflopening.service
+UNITE=$(sed "s#/opt/mouflopening#$REPO_DIR#g" "$REPO_DIR/mouflopening.service")
+if [ "$UNITE" != "$(cat /etc/systemd/system/mouflopening.service 2>/dev/null)" ]; then
+    printf '%s\n' "$UNITE" > /etc/systemd/system/mouflopening.service
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
     log "📋 Service systemd mis à jour"

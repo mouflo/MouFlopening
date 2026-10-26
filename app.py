@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_file
@@ -29,11 +29,12 @@ load_secrets_env()   # identifiants et clé Emby (data/secrets.env), avant l'ini
 
 
 def _tmdb_key_from_moufloster():
-    """Pas de clé TheMovieDB ici : on reprend celle de MouFloster (même serveur, même compte) sans la copier ni l'afficher."""
+    """Pas de clé TheMovieDB ici : on reprend celle de MouFloster installé à côté (même serveur, même compte), sans la copier
+    ni l'afficher. Pour la copier ici : ⚙️ Réglages → Connexions → 🔗 Applis voisines."""
     if os.getenv("TMDB_API_KEY", "").strip():
         return
     try:
-        for line in Path("/opt/moufloster/data/secrets.env").read_text(encoding="utf-8").splitlines():
+        for line in (BASE_DIR.parent / "moufloster" / "data" / "secrets.env").read_text(encoding="utf-8").splitlines():
             if line.startswith("TMDB_API_KEY="):
                 os.environ["TMDB_API_KEY"] = line.split("=", 1)[1].strip().strip("'\"")
                 return
@@ -51,28 +52,19 @@ from src.sources.animethemes import AnimeThemesSource
 from src.sources.youtube import YouTubeSource
 from src.sources.base_source import ThemeResult
 
-BASE_VERSION = "0.2"
-
-
-def _changelog_version():
-    """Numéro de version = la dernière entrée du CHANGELOG.md (celle que je décris à chaque mise à jour)."""
-    try:
-        m = re.search(r"^## \[(\d+\.\d+\.\d+)\]", (BASE_DIR / "CHANGELOG.md").read_text(encoding="utf-8"), re.M)
-        return m.group(1) if m else ""
-    except OSError:
-        return ""
+# Version : base manuelle + nombre de commits depuis le passage en 1.1 + hash court (comme MouFloster et MouFlanga).
+# Avant, elle était lue dans le CHANGELOG et restait bloquée quand les entrées étaient « Non publié ».
+BASE_VERSION = "1.1"
+DEPART_VERSION = 99          # nombre de commits juste avant la 1.1 : la version repart de 1.1.1
 
 
 def get_version():
-    num = _changelog_version()
     try:
-        short = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, text=True, stderr=subprocess.DEVNULL).strip()
-        if num:
-            return f"v{num} ({short})"
         count = subprocess.check_output(["git", "rev-list", "--count", "HEAD"], cwd=BASE_DIR, text=True, stderr=subprocess.DEVNULL).strip()
-        return f"v{BASE_VERSION}.{count} ({short})"
+        short = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, text=True, stderr=subprocess.DEVNULL).strip()
+        return f"v{BASE_VERSION}.{max(0, int(count) - DEPART_VERSION)} ({short})"
     except Exception:
-        return f"v{num or BASE_VERSION}"
+        return f"v{BASE_VERSION}"
 
 
 APP_VERSION = get_version()
@@ -122,6 +114,8 @@ import diag
 diag.setup_logging()
 logger = logging.getLogger("mouflopening")
 auth.init_app(app, APP_VERSION)
+import compression   # réponses texte compressées (gzip) : beaucoup moins de données au téléphone
+compression.init_app(app)
 import apparence
 apparence.init_app(app)     # skins et couleurs au choix, par compte
 import comptes          # 👥 comptes « copain » (créés dans Réglages → Comptes)
@@ -137,7 +131,8 @@ _work_lock = threading.Lock()   # un seul téléchargement/conversion à la fois
 
 # Anciens thèmes mis de côté : sur le NAS (dossier MouFlopening), repli sur data/ si le partage n'est pas accessible
 OLD_BACKUP_DIR = BASE_DIR / "data" / "themes-backup"
-_BACKUP_CFG = Path(CONFIG.get("themes", {}).get("backup_dir") or "/mnt/mouflosyno/MouFlopening/Anciens thèmes")
+BACKUP_DEFAUT = BASE_DIR / "data" / "anciens-themes"         # à choisir dans ⚙️ Réglages → Dossiers (un dossier du NAS, de préférence)
+_BACKUP_CFG = Path(CONFIG.get("themes", {}).get("backup_dir") or BACKUP_DEFAUT)
 
 
 def _backup_dir():
@@ -366,7 +361,7 @@ def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
         BATCH.update(kind="download", running=True, total=len(todo), done=0, failed=0, current="")
         if fresh:
             BATCH["messages"] = []
-    n_failed, failures = 0, []
+    n_failed, failures, added_keys = 0, [], []
     _batch_note(("" if fresh else f"— {CATS[cat]['name']} — ") + f"{len(todo)} thème(s) à chercher" + (" (séries et saisons)" if with_seasons else " (séries)")
                 + (f" · {n_skip} mis de côté (déjà cherchés sans résultat) ignoré(s)" if n_skip else ""))
     if True:
@@ -386,11 +381,12 @@ def _run_batch_inner(limit, with_seasons, cat, kind, fresh, added_titles):
                 BATCH["done" if ok else "failed"] += 1
             if ok:
                 added_titles.append(label)
+                added_keys.append(str(folder))
             else:
                 n_failed += 1
-                failures.append((label, msg))
+                failures.append((label, msg, str(folder)))
             _batch_note(("✅ " if ok else "❌ ") + f"{label} — {msg}")
-    return {"kind": kind, "added": added_titles, "failed": n_failed, "failures": failures}
+    return {"kind": kind, "added": added_titles, "added_keys": added_keys, "failed": n_failed, "failures": failures}
 
 
 def year_of(name):
@@ -451,6 +447,56 @@ def themerr_for(series, kind):
     return None, f"{last} (identifiant TheMovieDB {', '.join(map(str, ids))})"
 
 
+# Films et séries absents de ThemerrDB : retenus 7 jours (la base grossit lentement), pour ne pas refaire chaque nuit
+# les mêmes recherches (TheMovieDB, Emby, ThemerrDB) pour près de 200 titres. Une panne n'est jamais retenue.
+ABSENTS_FILE = BASE_DIR / "data" / "themerrdb_absents.json"
+ABSENTS_JOURS = 7
+_absents_lock = threading.Lock()
+_PANNE = ("injoignable", "ne répond pas", "a répondu 5", "illisible", "délai", "Timeout", "ConnectionError")
+
+
+def _absents():
+    try:
+        d = json.loads(ABSENTS_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _absents_ecrire(d):
+    try:
+        ABSENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = ABSENTS_FILE.with_suffix(f".{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, ABSENTS_FILE)
+    except OSError as e:
+        logger.warning("Registre ThemerrDB impossible à écrire : %s", e)
+
+
+def absent_recent(folder):
+    """Date (JJ/MM) de la dernière recherche ThemerrDB sans résultat pour ce titre, si elle a moins de 7 jours."""
+    e = _absents().get(str(folder)) or {}
+    try:
+        quand = datetime.strptime(e.get("date", ""), "%Y-%m-%d")
+    except ValueError:
+        return None
+    return quand.strftime("%d/%m") if (datetime.now() - quand).days < ABSENTS_JOURS else None
+
+
+def absent_noter(folder, why):
+    with _absents_lock:
+        d = _absents()
+        d[str(folder)] = {"date": datetime.now().strftime("%Y-%m-%d"), "why": why}
+        _absents_ecrire(d)
+
+
+def absent_retirer(folder):
+    with _absents_lock:
+        d = _absents()
+        if d.pop(str(folder), None) is not None:
+            _absents_ecrire(d)
+
+
 def _auto_one(folder, title, series=None, number=None, query=None, kind="anime"):
     """Choisit automatiquement le générique (animes : AnimeThemes ; films et séries : uniquement ThemerrDB), l'enregistre (normalisé) et prévient Emby. -> (succès, message)"""
     series = series or folder
@@ -464,9 +510,16 @@ def _auto_one(folder, title, series=None, number=None, query=None, kind="anime")
             # sur YouTube (il valide n'importe quoi) : sinon on passe au suivant, la recherche se fait à la main.
             if number is not None:
                 return False, "pas de thème validé par la communauté pour une saison : à chercher à la main"
+            vu = absent_recent(series)
+            if vu:
+                return False, f"pas de thème validé par la communauté (ThemerrDB, vérifié le {vu}) : à chercher à la main"
             tr, why = themerr_for(series, kind)
             if not tr:
+                if any(k in (why or "") for k in _PANNE):          # panne : retenté au prochain lot, rien n'est retenu
+                    return False, f"{TRANSIENT}ThemerrDB ou TheMovieDB ne répond pas pour le moment ({why}) : sera retenté au prochain lot"
+                absent_noter(series, why)
                 return False, f"pas de thème validé par la communauté (ThemerrDB : {why or 'inconnu'}) : à chercher à la main"
+            absent_retirer(series)
             from src.sources.youtube import watch_url
             result = ThemeResult(title=(tr["title"] or title) + " (ThemerrDB)", source="YouTube", url=watch_url(tr["video_id"]))
         else:
@@ -659,7 +712,9 @@ def api_library():
     # « ok » recalculé à chaque chargement : un partage pas encore monté au démarrage ne reste pas signalé ensuite
     cats = [{"index": i, "name": c["name"], "kind": c["kind"], "ok": all(Path(p).is_dir() for p in c["paths"]),
              "multi": len(c["paths"]) > 1} for i, c in enumerate(CATS)]
-    return jsonify({"items": items, "emby": EMBY.configured, "categories": cats})
+    import voisins
+    moufloster = voisins.dossier("moufloster") is not None or bool(os.getenv("MOUFLOSTER_URL", "").strip() or os.getenv("MOUFLOSTER_URL_EXTERNE", "").strip())
+    return jsonify({"items": items, "emby": EMBY.configured, "categories": cats, "moufloster": moufloster})
 
 
 def _search_work(body):
@@ -1260,6 +1315,86 @@ try:
 except Exception:
     logger.exception("Migration des anciennes sauvegardes impossible")
 emby_settings.init_app(app, BASE_DIR, lambda: EMBY.host, _emby_key_changed)
+
+
+# ---------- 🔗 applis voisines (MouFloster…) : appels directs protégés par une clé (voisins.py) ----------
+def _apres_reprise(noms):
+    """Réglages repris d'une appli voisine : Emby sert tout de suite (TheMovieDB et Telegram sont relus à chaque appel)."""
+    if "EMBY_URL" in noms:
+        EMBY.host = os.environ["EMBY_URL"].strip().rstrip("/")
+    if "EMBY_API_KEY" in noms:
+        EMBY.api_key = os.environ["EMBY_API_KEY"].strip()
+
+
+import voisins
+voisins.init_app(app, BASE_DIR, emby_settings._write_secret, _apres_reprise)
+
+
+def _titre_du_dossier(dossier):
+    """Dossier complet d'un titre (envoyé par une voisine) -> (identifiant « n/Dossier », dossier), ou (None, None)."""
+    try:
+        cible = Path(str(dossier)).resolve()
+    except (OSError, ValueError):
+        return None, None
+    for i, root in enumerate(ROOTS):
+        try:
+            if cible.parent == Path(root).resolve() and cible.is_dir():
+                return f"{i}/{cible.name}", cible
+        except OSError:
+            continue
+    return None, None
+
+
+@voisins.route(app, "/api/voisin/generique")
+def voisin_generique():
+    item_id, folder = _titre_du_dossier(request.args.get("dossier", ""))
+    if not item_id:
+        return jsonify({"ok": True, "trouve": False})
+    return jsonify({"ok": True, "trouve": True, "id": item_id, "theme": find_theme(folder) is not None})
+
+
+@voisins.route(app, "/api/voisin/generique/auto", methods=["POST"])
+def voisin_generique_auto():
+    """MouFloster vient d'envoyer un poster : on cherche tout de suite le générique validé (ThemerrDB, AnimeThemes)."""
+    item_id, folder = _titre_du_dossier((request.get_json(silent=True) or {}).get("dossier") or "")
+    if not item_id:
+        return jsonify({"ok": False, "error": "ce titre n'est pas dans la médiathèque de MouFlopening (onglet décoché ?)"}), 404
+    if find_theme(folder) is not None:
+        return jsonify({"ok": True, "deja": True, "id": item_id})
+    kind, title = kind_of(item_id), library.clean_title(folder.name)
+
+    def work():
+        if _work_lock.locked():
+            progress.say("En attente : un autre générique est en cours…")
+        progress.say("Recherche du générique…")
+        ok, msg = _auto_one(folder, title, kind=kind)
+        if ok:
+            skipped.remove(folder)
+        logger.info("🔗 Générique demandé par MouFloster : %s — %s", folder.name, msg)
+        return {"ok": ok, "message": msg, "id": item_id}, 200
+    return jsonify({"ok": True, "job": progress.start(work), "id": item_id})
+
+
+@voisins.route(app, "/api/voisin/job/<jid>")
+def voisin_job(jid):
+    st = progress.status(jid, request.args.get("since", 0, type=int) or 0)
+    if st is None:
+        return jsonify({"error": "Opération inconnue (MouFlopening a peut-être redémarré)"}), 404
+    return jsonify(st)
+
+
+@app.route("/api/moufloster/lien")
+def api_moufloster_lien():
+    """Pour le bouton « 🖼️ Poster dans MouFloster » : titre, identifiant TheMovieDB (d'après Emby) et adresses de MouFloster."""
+    item_id = request.args.get("id", "")
+    _, series, saison = library.resolve_target(ROOTS, item_id)
+    if series is None:
+        return jsonify({"error": "Titre introuvable"}), 404
+    kind, title = kind_of(item_id), library.clean_title(series.name)
+    tid, _why = EMBY.tmdb_id(series.name, title, kind, series.parent.name)
+    return jsonify({"ok": True, "titre": title, "tmdb": tid or None, "type": "movie" if kind == "movie" else "tv", "saison": saison,
+                    "url": os.getenv("MOUFLOSTER_URL", "").strip(), "url_externe": os.getenv("MOUFLOSTER_URL_EXTERNE", "").strip(),
+                    "ici": voisins.dossier("moufloster") is not None, "port": voisins.APPLIS["moufloster"][1]})
 import tmdb_settings
 tmdb_settings.init_app(app, BASE_DIR)
 diag.init_app(app, APP_VERSION, lambda: ROOTS, EMBY.describe, _batch_state_text)
@@ -1294,6 +1429,80 @@ from src import nightly
 nightly.init(BASE_DIR / "data" / "nightly.json")
 
 
+def _arrivees_emby(depuis):
+    """Secours sans MouFloster : titres ajoutés dans Emby depuis « depuis », retrouvés dans la médiathèque par leur dossier."""
+    if not EMBY.configured:
+        return []
+    items = EMBY._request("GET", "/Items", params={"Recursive": "true", "IncludeItemTypes": "Movie,Series,Season", "MinDateCreated": depuis,
+                                                  "Fields": "Path,ProductionYear", "SortBy": "DateCreated", "SortOrder": "Descending",
+                                                  "Limit": 200}).json().get("Items", [])
+    par_nom = {}
+    for i, root in enumerate(ROOTS):
+        par_nom.setdefault(Path(root).name.casefold(), Path(root))
+    groupes = {}
+    for it in items:
+        parts = [p for p in re.split(r"[\\/]", it.get("Path") or "") if p]
+        if it.get("Type") == "Movie":
+            parts = parts[:-1]                          # le dernier élément est le fichier du film
+        elif it.get("Type") == "Season":
+            parts = parts[:-1]                          # dossier de la saison -> dossier de la série
+        if len(parts) < 2 or parts[-2].casefold() not in par_nom:
+            continue
+        dossier = par_nom[parts[-2].casefold()] / parts[-1]
+        g = groupes.setdefault(str(dossier), {"titre": library.clean_title(parts[-1]), "annee": "?", "saisons": [], "saisons_faites": [],
+                                               "nouveau": False, "dossier": str(dossier), "media_type": "movie" if it.get("Type") == "Movie" else "tv"})
+        if it.get("Type") == "Season":
+            if it.get("IndexNumber") is not None and int(it["IndexNumber"]) not in g["saisons"]:
+                g["saisons"].append(int(it["IndexNumber"]))
+        else:
+            g.update(nouveau=True, titre=it.get("Name") or g["titre"], annee=str(it.get("ProductionYear") or "?"))
+    return list(groupes.values())
+
+
+def _arrivees(depuis, poses):
+    """Titres arrivés dans Emby depuis le dernier compte rendu, pour le message de la nuit : leur générique (posé cette nuit,
+    déjà là, à chercher) et, d'après MouFloster, leur poster. -> {"lignes", "total", "posters", "lien"} ou None."""
+    avec_posters = True
+    try:
+        elements = voisins.appeler("moufloster", "GET", "/api/voisin/nouveautes", params={"depuis": depuis}, timeout=60).get("elements") or []
+    except voisins.ErreurVoisin as e:
+        logger.info("[nuit] Nouveautés de MouFloster indisponibles (%s) : liste lue dans Emby", e)
+        avec_posters, elements = False, _arrivees_emby(depuis)
+    if not elements:
+        return None
+    lignes, posters = [], 0
+    for el in elements:
+        a_faire = bool(el.get("poster") or el.get("saisons")) if avec_posters else False
+        posters += a_faire
+        if len(lignes) >= 15:
+            continue
+        item_id, folder = _titre_du_dossier(el.get("dossier") or "")
+        kind = kind_of(item_id) if item_id else ("movie" if el.get("media_type") == "movie" else "series")
+        saisons = sorted(set(el.get("saisons") or []) | set(el.get("saisons_faites") or []))
+        nom = el.get("titre") or "?"
+        if el.get("annee") and el.get("annee") != "?":
+            nom += f" ({el['annee']})"
+        if saisons and not el.get("nouveau"):
+            nom += " · saison" + ("s " if len(saisons) > 1 else " ") + ", ".join("spéciaux" if n == 0 else str(n) for n in saisons)
+        parts = []
+        if folder is not None:
+            dossiers = [folder]
+            if saisons and not el.get("nouveau") and kind == "anime":   # nouvelle saison d'un anime : son propre générique
+                dossiers = [f for n, f in library.season_folders(folder) if n in saisons and n >= 2] or [folder]
+            if any(str(d) in poses for d in dossiers):
+                parts.append("🎵 posé cette nuit")
+            elif all(find_theme(d) is not None for d in dossiers):
+                parts.append("🎵 ✓")
+            else:
+                parts.append("🎵 à chercher")
+        if avec_posters:
+            parts.append("🖼️ à faire" if a_faire else "🖼️ ✓")
+        icone = {"movie": "🎬", "anime": "🎌"}.get(kind, "📺")
+        lignes.append(f"  {icone} {nom}" + (" — " + " · ".join(parts) if parts else ""))
+    lien = os.getenv("MOUFLOSTER_URL_EXTERNE", "").strip() or os.getenv("MOUFLOSTER_URL", "").strip()
+    return {"lignes": lignes, "total": len(elements), "posters": posters, "lien": lien}
+
+
 def _nightly_run():
     """Cherche les thèmes manquants de tous les onglets, puis envoie le compte rendu par Telegram."""
     with _batch_lock:
@@ -1310,9 +1519,18 @@ def _nightly_run():
             by_cat.append(_run_batch(None, c["kind"] == "anime" and nightly.settings()["seasons"], i, fresh=(i == 0)))
     except Exception:
         logger.exception("Lot de nuit interrompu")
-    text = nightly.format_report(by_cat, time.time() - t0)
+    reglages = nightly.settings()
+    maintenant = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    depuis = reglages.get("dernier_rapport") or (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        arrivees = _arrivees(depuis, {k for c in by_cat for k in c.get("added_keys") or []})
+    except Exception:
+        logger.exception("[nuit] Liste des arrivées dans Emby impossible")
+        arrivees = None
+    text = nightly.format_report(by_cat, time.time() - t0, deja=reglages.get("signales"), arrivees=arrivees)
     summary = f"{sum(len(c['added']) for c in by_cat)} ajouté(s), {sum(c['failed'] for c in by_cat)} sans thème"
-    nightly.save(last_summary=f"{datetime.now():%d/%m %H:%M} : {summary}")
+    signales = sorted({f[2] for c in by_cat for f in c.get("failures") or [] if len(f) > 2})
+    nightly.save(last_summary=f"{datetime.now():%d/%m %H:%M} : {summary}", signales=signales, dernier_rapport=maintenant)
     logger.info("[nuit] Lot terminé : %s", summary)
     if text:
         ok, msg = nightly.send(text)
@@ -1365,7 +1583,7 @@ def _set_target_db(value):
 
 
 settings_page.init_app(app, BASE_DIR, lambda: APP_VERSION, lambda: CONFIG, lambda: CATS, lambda: IGNORED_FOLDERS, EMBY,
-                       "/mnt/mouflosyno/MouFlopening/Anciens thèmes", get_db=lambda: TARGET_DB, set_db=_set_target_db,
+                       str(BACKUP_DEFAUT), get_db=lambda: TARGET_DB, set_db=_set_target_db,
                        get_trim=lambda: dict(AUTO_TRIM), set_trim=AUTO_TRIM.update)
 threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
 from src.sources import youtube as _yt_module
@@ -1373,5 +1591,6 @@ threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.ge
 
 
 if __name__ == "__main__":
+    voisins.preparer_cle()
     redemarrage.verifier(BASE_DIR, "MouFlopening", BASE_DIR / "data" / "mouflopening.log", lambda t: nightly.send(t))
     app.run(debug=False, host="0.0.0.0", port=8001)

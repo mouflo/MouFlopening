@@ -20,6 +20,7 @@ def init_app(app, base_dir, nightly, run_now, is_busy):
     def nightly_state():
         tok, chat, origin = nightly.telegram_config()
         s = nightly.settings()
+        s.pop("signales", None)              # liste interne (dossiers déjà signalés), inutile à la page
         return jsonify({**s, "telegram": bool(tok and chat), "telegram_origin": origin,
                         "chat_hint": ("…" + chat[-3:]) if chat else "",
                         "thread_id": nightly.telegram_thread()})

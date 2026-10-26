@@ -162,12 +162,29 @@ LOGIN_HTML = """<!DOCTYPE html>
 <main class="box">
     <h1 class="mou-title big"><img src="/icons/mouflopening.svg" alt=""><span><span class="w">MouFl</span><span class="g">opening</span></span></h1>
     <div class="sub">Thèmes musicaux pour Emby</div>
-    {% if not configured %}
+    {% if not configured and creation %}
+        <div class="sub" style="margin-bottom:10px">Première connexion : crée ton identifiant (il protège l'accès à l'appli).</div>
+        {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+        <form method="post" action="/login" autocomplete="off">
+            <input type="hidden" name="creer" value="1">
+            <label for="username">Identifiant</label>
+            <input type="text" id="username" name="username" autocapitalize="off" autocorrect="off" spellcheck="false" required autofocus value="{{ username }}">
+            <label for="password">Mot de passe (8 caractères minimum)</label>
+            <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8">
+            <label for="password2">Mot de passe, encore une fois</label>
+            <input type="password" id="password2" name="password2" autocomplete="new-password" required minlength="8">
+            <div class="remember">
+                <input type="checkbox" id="voirMdp2" onchange="var t = this.checked ? 'text' : 'password'; document.getElementById('password').type = t; document.getElementById('password2').type = t">
+                <label for="voirMdp2" style="margin:0">Afficher le mot de passe</label>
+            </div>
+            <button type="submit">Créer mon identifiant</button>
+        </form>
+    {% elif not configured %}
         <div class="error">Aucun identifiant n'est encore défini sur ce serveur.</div>
         <div class="setup">
-            Pour verrouiller l'accès, tape cette commande dans le terminal du serveur, puis reviens ici :
-            <code>bash /opt/mouflopening/set-login.sh</code>
-            Elle te demandera un identifiant et un mot de passe.
+            Ouvre cette page depuis ton réseau local (adresse du serveur, sans passer par Internet) pour le créer ici,
+            ou tape cette commande dans le terminal du serveur, puis reviens :
+            <code>bash {{ dossier }}/set-login.sh</code>
         </div>
     {% else %}
         {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
@@ -202,10 +219,28 @@ def _safe_next(value):
     return "/"
 
 
+def _creation_permise():
+    """Créer l'identifiant depuis la page : seulement tant qu'il n'existe pas, et seulement en accès DIRECT depuis le
+    réseau local (pas à travers un proxy ni Internet : sinon n'importe qui pourrait le créer avant toi)."""
+    if configured():
+        return False
+    orig = (request.environ.get("werkzeug.proxy_fix.orig") or {})
+    if request.headers.get("X-Forwarded-For") or orig.get("HTTP_X_FORWARDED_FOR"):
+        return False
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address(orig.get("REMOTE_ADDR") or request.remote_addr or "")
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback
+
+
 def _page(error="", username="", status=200):
     html = render_template_string(
         LOGIN_HTML,
         configured=configured(),
+        creation=_creation_permise(),
+        dossier=str(BASE_DIR),
         error=error,
         username=username,
         next=_safe_next(request.values.get("next", "")),
@@ -266,6 +301,8 @@ def init_app(app, version=""):
     def require_login():
         if request.path in ("/login", "/healthz", "/favicon.ico") or request.path.startswith(("/icons/", "/ui/")):
             return None
+        if request.path.startswith("/api/voisin/"):      # applis voisines : protégées par leur clé (voisins.py), pas par la connexion
+            return None
         rl = role()
         if rl == "admin":
             return None
@@ -289,6 +326,18 @@ def init_app(app, version=""):
             return _page()
 
         if not configured():
+            if request.form.get("creer") and _creation_permise():
+                user, mdp = (request.form.get("username") or "").strip(), request.form.get("password") or ""
+                if mdp != (request.form.get("password2") or ""):
+                    return _page("Les deux mots de passe sont différents.", username=user, status=400)
+                try:
+                    _write_login(user, mdp, terminal=False)
+                except ValueError as e:
+                    return _page(str(e), username=user, status=400)
+                session.clear()
+                session["u"], session["f"], session["r"] = _user(), _fingerprint(), "admin"
+                session.permanent = True
+                return redirect("/")
             return _page(status=503)
         ip = request.remote_addr or "?"
         if _blocked(ip):
@@ -343,11 +392,17 @@ def _quote(value):
 # Outil en ligne de commande (utilisé par set-login.sh)
 # ---------------------------------------------------------------------------
 
-def _write_login(user, password):
+def _write_login(user, password, terminal=True):
+    """Enregistre l'identifiant (set-login.sh, ou la page de première connexion avec terminal=False : ValueError si refusé)."""
+    erreur = None
     if not re.fullmatch(r"[A-Za-z0-9._@+-]{2,64}", user):
-        raise SystemExit("❌ Identifiant: 2 à 64 caractères (lettres, chiffres, . _ @ + -)")
-    if len(password) < 8:
-        raise SystemExit("❌ Mot de passe trop court (8 caractères minimum)")
+        erreur = "Identifiant : 2 à 64 caractères (lettres, chiffres, . _ @ + -)"
+    elif len(password) < 8:
+        erreur = "Mot de passe trop court (8 caractères minimum)"
+    if erreur:
+        if terminal:
+            raise SystemExit("❌ " + erreur)
+        raise ValueError(erreur)
     hashed = generate_password_hash(password)
 
     SECRETS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -359,7 +414,9 @@ def _write_login(user, password):
     tmp.write_text("\n".join(lines) + "\n")
     os.chmod(tmp, 0o600)
     os.replace(tmp, SECRETS_FILE)
-    print(f"✅ Identifiant « {user} » enregistré (mot de passe haché)")
+    os.environ["APP_USER"], os.environ["APP_PASSWORD_HASH"] = user, hashed      # pris en compte sans redémarrer
+    if terminal:
+        print(f"✅ Identifiant « {user} » enregistré (mot de passe haché)")
 
 
 if __name__ == "__main__":

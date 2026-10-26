@@ -1,13 +1,12 @@
 {
   "emby": {
-    "host": "http://192.168.1.134:8096",
+    "host": "",
     "api_key": "your_emby_api_key_here",
     "scan_after_download": true,
     "timeout": 30
   },
   "themes": {
-    "output_dir": "/opt/mouflopening/data/themes",
-    "backup_dir": "/mnt/mouflosyno/MouFlopening/Anciens thèmes"
+    "backup_dir": ""
   },
   "sources": {
     "animethemes": {
@@ -66,8 +65,10 @@
     "scan_missing_interval_hours": 12
   },
   "library": {
-    "auto_parent": "/mnt/mouflosyno/Emby-Media",
-    "categories": []
+    "auto_parent": "",
+    "categories": [],
+    "paths": [],
+    "excluded": []
   },
   "audio": {
     "target_db": 89

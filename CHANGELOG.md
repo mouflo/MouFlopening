@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1] - 2026-10-26
+La version affichée est maintenant « 1.1 » suivie du nombre de mises à jour (avant, elle était lue ici et restait bloquée à 1.0.1 quand les entrées étaient « Non publié »).
+- 🌙 **Lot de nuit moins répétitif** : un film ou une série absent de ThemerrDB n'est revérifié qu'une fois par semaine (avant : près de 200 recherches TheMovieDB, Emby et ThemerrDB inutiles chaque nuit) ; une panne de ThemerrDB ou de TheMovieDB (« a répondu 503 »…) est une panne passagère, retentée la nuit suivante.
+- 📨 **Compte rendu Telegram : seulement ce qui est nouveau**. Les titres sans thème déjà signalés tiennent en une ligne (« 📋 195 titres toujours sans thème ») ; pas de message du tout s'il n'y a rien de neuf (avant : « 196 sans thème » chaque nuit).
+- 🆕 **Arrivés dans Emby** (compte rendu commun avec MouFloster) : pour chaque titre ajouté depuis le dernier compte rendu, son générique (posé cette nuit, déjà là, à chercher) et son poster (à faire ou fait, d'après MouFloster), avec le nombre de posters à faire et l'adresse de MouFloster. Sans MouFloster, la liste est lue dans Emby (sans les posters).
+- ⏭ **Enchaîner** (case sur la fiche d'un titre) : une fois le générique posé, passage tout seul au titre suivant de la liste, recherche lancée ; bouton « ⏭ Titre suivant » pour passer sans rien enregistrer. Avec le filtre « Saison sans thème », la saison à faire est choisie directement.
+- 🖼️ **« Poster dans MouFloster »** sur la fiche d'un titre : MouFloster s'ouvre sur ce titre (identifiant TheMovieDB d'après Emby) et cette saison, avec un lien pour revenir ici. Adresses de MouFloster dans ⚙️ Réglages → Connexions (devinées s'il est sur le même serveur).
+- 🎵 **Générique cherché à la demande de MouFloster** : après l'envoi d'un poster, MouFloster demande directement le générique validé (ThemerrDB, AnimeThemes) du titre, sans qu'on ait à ouvrir MouFlopening.
+- 🔗 **Applis voisines** (⚙️ Réglages → Connexions) : les applis MouFl du même serveur se parlent avec une clé créée toute seule (`voisins.py`, identique dans MouFloster et MouFlopening) ; « 📥 Reprendre les réglages de » copie Emby, TheMovieDB ou Telegram d'une autre appli. Les clés ne s'affichent jamais (4 derniers caractères seulement). La clé TheMovieDB et le Telegram de MouFlanimeXer sont cherchés à côté de l'appli, plus à un chemin écrit en dur.
+- 🗜️ **Liste compressée** (gzip) : 546 Ko → 51 Ko à chaque rechargement, au téléphone ; pages et réponses compressées dans les quatre applis (`compression.py`).
+- 🎨 **Onglets et puces lisibles** : l'onglet choisi (et la saison choisie) est maintenant vert vif, les autres sombres ; le style commun des boutons inversait les couleurs.
+- 🧰 **Installable chez d'autres**, comme MouFloster : identifiant créé à la première ouverture de la page (depuis le réseau local seulement), `install.sh` complet (python3-venv, ffmpeg, service, mise à jour chaque nuit/heure/minute ou jamais), valeurs par défaut neutres (adresse d'Emby vide, dossiers à choisir, anciens thèmes dans `data/anciens-themes` tant qu'aucun dossier n'est choisi), déploiement qui marche depuis n'importe quel dossier.
+
 ## [Non publié] - 2026-10-20
 - 🎨 **Interface commune, version 2** (identique dans les cinq applis) : les fenêtres et les bulles de message suivent les couleurs du skin choisi, les fenêtres plus hautes que l'écran défilent avec leurs boutons collés en bas, la touche « retour » du téléphone ferme la fenêtre ouverte au lieu de quitter l'appli, et le **logo de l'en-tête et l'icône de l'onglet changent de couleur avec le skin**.
 - 🖌️ **Skins et couleurs au choix, par compte** (bouton 🎨 Apparence) : trois skins officiels, Violet cinéma, Océan et Papier, partagés par toutes les applis.
