@@ -585,7 +585,7 @@ async function search(full) {
     }
     else if (data.note) note($('msg'), data.note, 'warn');
     $('cands').innerHTML = res.map((a, ai) => `
-        <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.channel ? a.channel + ' · ' : '')}${esc(a.year || '')} · correspondance ${esc(a.score)} %</small></h4>
+        <div class="cand" data-ai="${ai}"><h4>${esc(a.name)}<small>${esc(a.channel ? a.channel + ' · ' : '')}${esc(a.year || '')} · correspondance ${esc(a.score)} %${a.why ? '<br>' + esc(a.why) : ''}</small></h4>
         ${a.themes.map((t, ti) => `
             <div class="theme"><span class="slug">${esc(t.slug)}</span>
             ${t.youtube ? `<button class="btn ghost small ytbtn" data-yt="${esc(t.youtube)}">▶ Écouter</button>` : `<audio controls preload="none" src="${esc(t.audio || t.video)}"></audio>`}

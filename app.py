@@ -101,12 +101,31 @@ app = Flask(__name__)
 
 from src import progress
 from src import skipped
+from src import mediatheque_index
 from src.netfix import repair_urllib3
 
 
 @app.before_request
 def _repair_http():
     repair_urllib3()          # yt-dlp abîme urllib3 : on le répare avant chaque requête (voir src/netfix.py)
+
+_ONGLETS = {"verifie": 0.0}
+
+
+@app.before_request
+def _verifier_onglets():
+    """Les onglets (Animes, Séries, Films) se recalculent si les dossiers du NAS apparaissent après le démarrage (partage monté en retard après un
+    redémarrage du serveur) : au plus une vérification toutes les 15 secondes, et seulement tant que quelque chose manque ou est introuvable."""
+    maintenant = time.time()
+    if maintenant - _ONGLETS["verifie"] < 15 or (CATS and all(c["ok"] for c in CATS)):
+        return
+    _ONGLETS["verifie"] = maintenant
+    try:
+        if library.recalculer_onglets(CONFIG, CATS, ROOTS, ROOT_CAT, IGNORED_FOLDERS):
+            logging.getLogger("mouflopening").info("Onglets recalculés : %s", " · ".join(f"{c['name']} ({len(c['paths'])})" for c in CATS))
+    except Exception:
+        logging.getLogger("mouflopening").exception("Recalcul des onglets impossible")
+
 
 import auth
 import diag
@@ -690,7 +709,7 @@ def api_poster():
 
 @app.route("/api/library")
 def api_library():
-    items = library.list_library(ROOTS)
+    items = mediatheque_index.lister(ROOTS)       # index SQLite : seuls les titres dont le dossier a changé sont relus (avant : 5 s à froid)
     sk = skipped.entries()
 
     def why(key):
@@ -1586,6 +1605,9 @@ settings_page.init_app(app, BASE_DIR, lambda: APP_VERSION, lambda: CONFIG, lambd
                        str(BACKUP_DEFAUT), get_db=lambda: TARGET_DB, set_db=_set_target_db,
                        get_trim=lambda: dict(AUTO_TRIM), set_trim=AUTO_TRIM.update)
 threading.Thread(target=nightly.loop, args=(_nightly_run, lambda: bool(BATCH.get("running"))), daemon=True).start()
+mediatheque_index.configurer(BASE_DIR / "data" / "index.sqlite")
+threading.Thread(target=lambda: mediatheque_index.lister(ROOTS), daemon=True, name="index-demarrage").start()          # liste prête avant la 1re ouverture
+threading.Thread(target=mediatheque_index.boucle, args=(lambda: ROOTS,), daemon=True, name="index-controle").start()   # contrôle complet toutes les 15 min
 from src.sources import youtube as _yt_module
 threading.Thread(target=_yt_module.auto_update_loop, args=(lambda: bool(BATCH.get("running")) or _work_lock.locked(),), daemon=True).start()
 

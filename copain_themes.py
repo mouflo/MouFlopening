@@ -30,6 +30,7 @@ def _jeton(source, adresse, titre):
 
 
 def init_app(app, roots, library, find_theme, animethemes, youtube, version):
+    from src import mediatheque_index
     from src import title_lookup
     from src.sources import themerrdb
 
@@ -46,7 +47,7 @@ def init_app(app, roots, library, find_theme, animethemes, youtube, version):
         plie = lambda t: "".join(c for c in unicodedata.normalize("NFD", t or "") if unicodedata.category(c) != "Mn").lower()
         cle = plie(q)
         chez = []
-        for it in library.list_library(roots):
+        for it in mediatheque_index.lister(roots):
             nom = it.get("title") or it.get("name") or ""
             if cle in plie(nom) and it.get("has_theme"):
                 chez.append({"id": it["id"], "titre": nom})

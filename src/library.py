@@ -231,3 +231,23 @@ def discover_categories(cfg: dict, ignored: Optional[list] = None) -> List[dict]
         add(guess_kind(Path(path).name) or "series", path)
     return [{"name": g["name"] or DEFAULT_NAMES[k], "kind": k, "paths": g["paths"],
              "ok": all(Path(p).is_dir() for p in g["paths"])} for k, g in groups.items() if g["paths"]]
+
+
+def recalculer_onglets(cfg: dict, cats: list, roots: list, root_cat: list, ignored: list) -> bool:
+    """Recalcule les onglets d'après le disque et met à jour, sur place, les listes que le reste de l'appli garde en mémoire (`cats`, `roots`, `root_cat`,
+    `ignored`). Sert quand le partage du NAS n'est monté qu'après le démarrage de l'appli (redémarrage du serveur : les onglets calculés sur un dossier
+    vide ne revenaient jamais) ou quand un dossier apparaît. Rend True si quelque chose a changé. Un partage qui disparaît momentanément ne vide JAMAIS
+    les onglets déjà connus : on ne remplace que par un résultat au moins aussi complet."""
+    ign = []
+    nouveaux = discover_categories(cfg, ign)
+    signe = lambda cs: [(c["kind"], tuple(c["paths"]), bool(c["ok"])) for c in cs]
+    if signe(nouveaux) == signe(cats) and list(ign) == list(ignored):
+        return False
+    connus = {p for c in cats for p in c["paths"]}
+    if connus and not connus <= {p for c in nouveaux for p in c["paths"]}:
+        return False                                    # un onglet connu a disparu : le NAS est probablement démonté, on garde ce qu'on sait
+    cats[:] = nouveaux
+    roots[:] = [p for c in nouveaux for p in c["paths"]]
+    root_cat[:] = [i for i, c in enumerate(nouveaux) for _ in c["paths"]]
+    ignored[:] = ign
+    return True

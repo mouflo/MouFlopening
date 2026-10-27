@@ -23,9 +23,23 @@ logger = logging.getLogger(__name__)
 
 _ID_RE = re.compile(r"^[\w-]{11}$")
 _URL_RE = re.compile(r"^https://(?:www\.)?youtube\.com/watch\?v=([\w-]{11})$")
-# Mots qui rendent un résultat plus probable (générique) ou moins probable (reprise, réaction…)
-_GOOD = ("theme", "opening", "intro", "main title", "générique", "generique", "soundtrack", "ost", "title sequence")
-_BAD = ("reaction", "réaction", "cover", "remix", "lyrics", "karaoke", "tutorial", "piano", "guitar", "10 hours", "1 hour", "episode", "trailer", "review")
+# Mots qui rendent un résultat plus probable (points) ou moins probable (reprise, réaction, compilation…) : cherchés dans le titre de la vidéo, sans accents
+_GOOD = {"main theme": 25, "theme principal": 25, "theme song": 20, "opening theme": 20, "title theme": 20, "main title": 20, "title sequence": 15,
+         "opening credits": 15, "generique": 15, "opening": 15, "theme music": 12, "theme": 12, "intro": 10, "sigle": 10,
+         "soundtrack": 8, "bande originale": 8, "ost": 8, "score": 5}
+_GOOD_MAX = 40                  # un titre bourré de mots-clés n'en gagne pas plus
+_BAD = ("reaction", "cover", "remix", "lyrics", "karaoke", "tutorial", "piano", "guitar", "10 hours", "1 hour", "episode", "trailer", "review",
+        "compilation", "best of", "top 10", "top 5", "all themes", "every ", "playlist", "mashup", "nightcore", "slowed", "reverb", "8d ", "bass boost",
+        "ranking", "full album", "full movie", "behind the scenes", "making of", "parody", "parodie")
+_STOP = {"the", "a", "an", "of", "and", "et", "le", "la", "les", "l", "de", "des", "du", "un", "une", "in", "on", "to"}
+
+
+def _plie(texte: str) -> str:
+    """Minuscules, sans accents ni ponctuation : « Générique d'Ouverture ! » → « generique d ouverture »."""
+    import unicodedata
+    t = unicodedata.normalize("NFD", texte or "")
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn").lower()
+    return " ".join(re.sub(r"[^\w\s]", " ", t).split())
 
 
 def watch_url(video_id: str) -> str:
@@ -49,8 +63,10 @@ class YouTubeSource(BaseSource):
     def _keywords(media_type: str) -> List[str]:
         """Plusieurs formulations : comme à la main (« die hard 2 theme »), une seule ne suffit pas"""
         if media_type == "movie":
-            return ["theme", "main theme", "soundtrack", "OST", "bande originale", "main title"]
-        return ["theme", "theme song", "intro", "opening", "générique", "soundtrack"]
+            return ["theme", "main theme", "main title", "title theme", "theme song", "opening", "opening credits", "soundtrack", "OST", "score",
+                    "bande originale", "thème principal"]
+        return ["theme", "main theme", "theme song", "opening", "opening theme", "intro", "title sequence", "title theme", "générique",
+                "générique de début", "soundtrack", "OST", "TV theme", "sigle"]
 
     def _ydl(self):
         import yt_dlp   # importé à la demande : l'appli démarre même si le module manque
@@ -67,18 +83,52 @@ class YouTubeSource(BaseSource):
             return []
 
     def _score(self, title: str, entry: Dict[str, Any]) -> float:
-        name = (entry.get("title") or "").lower()
-        score = similarity(title, entry.get("title") or "") / 4      # le titre cherché doit apparaître
-        if title.lower() in name:
+        return self._noter(title, entry)[0]
+
+    def _noter(self, title: str, entry: Dict[str, Any]):
+        """(points, raisons) d'une vidéo : le titre cherché doit s'y trouver (sinon elle est écartée), un mot de générique dans son titre
+        (« main theme », « opening »…) la fait monter, une reprise, une réaction ou une compilation la fait descendre."""
+        brut = entry.get("title") or ""
+        name, cherche = _plie(brut), _plie(title)
+        raisons = []
+        score = similarity(title, brut) / 4                          # 0 à 25
+        mots = [w for w in cherche.split() if w not in _STOP and not re.fullmatch(r"(19|20)\d{2}", w)]
+        trouves = sum(1 for w in mots if re.search(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", name))
+        ratio = trouves / len(mots) if mots else 1.0
+        score += 35 * ratio
+        if ratio < 0.6:
+            score -= 40                                              # le titre n'apparaît pas : sans rapport
+            raisons.append("titre absent")
+        if cherche and cherche in name:
             score += 40
-        score += 15 * sum(w in name for w in _GOOD[:6])
-        score -= 30 * sum(w in name for w in _BAD)
+            raisons.append("le titre exact")
+        bons = [w for w in _GOOD if re.search(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", name)]
+        # « main theme » contient « theme » : on ne compte que le mot le plus précis
+        bons = [w for w in bons if not any(w != x and w in x for x in bons)]
+        score += min(_GOOD_MAX, sum(_GOOD[w] for w in bons))
+        if bons:
+            raisons.append("« " + bons[0] + " »")
+        if not bons and mots and name == cherche:
+            score -= 10                                              # le titre tout seul : peut être une chanson, une bande-annonce, un extrait…
+            raisons.append("titre seul (peut être autre chose qu'un thème)")
+        mauvais = [w for w in _BAD if w in name + " "]
+        score -= 30 * len(mauvais)
+        if mauvais:
+            raisons.append("à éviter : " + mauvais[0].strip())
+        chaine = _plie(entry.get("uploader") or entry.get("channel") or "")
+        if any(m in chaine for m in ("topic", "official", "soundtrack", "records", "music")):
+            score += 8
+            raisons.append("chaîne officielle ou musicale")
         dur = entry.get("duration") or 0
         if dur and dur > self.max_duration:
             score -= 100
-        elif 20 <= dur <= 240:
+        elif 25 <= dur <= 200:
             score += 15
-        return score
+        elif 200 < dur <= 330:
+            score += 5
+        elif dur > 330:
+            score -= 10
+        return score, raisons
 
     def _upload_years(self, entries: List[Dict[str, Any]]) -> None:
         """Ajoute `_year` (année de mise en ligne) aux entrées : la recherche rapide ne donne pas la date."""
@@ -107,8 +157,8 @@ class YouTubeSource(BaseSource):
         queries = [f"{title} {k}" for k in self._keywords(media_type)]
         if year:
             queries += [f"{title} {year} theme", f"{title} {year} soundtrack"]
-        say(f"YouTube : {len(queries)} recherches en parallèle…")
-        with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        say(f"YouTube : {len(queries)} recherches (mots-clés : theme, main theme, opening, générique…)…")
+        with ThreadPoolExecutor(max_workers=min(len(queries), 7)) as pool:      # 7 à la fois : chaque recherche garde un peu de mémoire
             batches = list(pool.map(lambda q: self._raw_search(q, 8), queries))
         say(f"YouTube : {sum(len(b) for b in batches)} vidéos reçues, tri par pertinence…")
         seen, entries = set(), []
@@ -134,16 +184,19 @@ class YouTubeSource(BaseSource):
             label = f"{dur // 60}:{dur % 60:02d}" if dur else ""
             if e.get("_year"):
                 label = f"{label} · {e['_year']}" if label else str(e["_year"])
+            points, raisons = self._noter(title, e)
+            points += e.get("_bonus", 0)
             out.append({"name": e.get("title", "?"), "year": label,
                         "channel": e.get("uploader") or e.get("channel") or "",
-                        "score": max(0, min(100, int(self._score(title, e) + e.get("_bonus", 0)))),
+                        "score": max(0, min(99, int(100 * points / 160))),            # 160 points ≈ le meilleur cas : les notes restent distinctes
+                        "why": ", ".join(raisons),
                         "themes": [{"slug": "▶", "type": "yt", "youtube": e["id"], "url": watch_url(e["id"])}]})
         return out
 
     def search(self, title: str, media_type: str = "series", year: Optional[int] = None) -> Optional[ThemeResult]:
         """Meilleur résultat pour le mode automatique (None si rien de convaincant)."""
         for c in self.candidates(title, media_type, limit=1, year=year):
-            if c["score"] >= 40:
+            if c["score"] >= 40:                                   # ≈ 64 points sur 160
                 return ThemeResult(title=c["name"], source=self.name, url=c["themes"][0]["url"])
         return None
 
