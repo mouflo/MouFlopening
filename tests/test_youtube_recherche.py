@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.sources.youtube import YouTubeSource  # noqa: E402
+from src.sources.youtube import YouTubeSource, est_exclue  # noqa: E402
 
 
 def source():
@@ -73,6 +73,49 @@ class NotesTest(unittest.TestCase):
     def test_video_trop_longue_ecartee(self):
         p, _ = self.s._noter("Die Hard", {"title": "Die Hard main theme 10 hours", "duration": 36000})
         self.assertLess(p, 0)
+
+
+class ExclusionsTest(unittest.TestCase):
+    """Les vidéos où l'on parle ne sont JAMAIS proposées (demande du 27/10) : bande-annonce en tête."""
+
+    def test_titres_exclus(self):
+        for titre in ("Les Tuche 4 - Bande-annonce officielle", "LES TUCHE 4 BANDE ANNONCE", "Les Tuche 4 | Bande-Annonce", "Die Hard Trailer #2",
+                      "Die Hard (Official Teaser)", "Die Hard - extrait exclusif", "Die Hard - Scène culte", "Interview du réalisateur de Die Hard",
+                      "Die Hard : making of", "Die Hard behind the scenes", "Die Hard critique", "Die Hard review", "Die Hard film complet",
+                      "Die Hard full movie", "Les Tuche 4 BA officielle", "Die Hard - TV spot", "Die Hard épisode 1"):
+            self.assertTrue(est_exclue(titre), titre)
+
+    def test_vrais_themes_gardes(self):
+        for titre in ("Die Hard - Main Theme", "Les Tuche 4 - Générique fin", "Ouverture - \"Les Tuche 4\"", "Menteur", "Joyeux Noël - Les Tuche 4",
+                      "Die Hard (Original Motion Picture Soundtrack) - Opening", "Effraction - \"Les Tuche 4\"", "Bastille - Pompeii"):
+            self.assertFalse(est_exclue(titre), titre)
+
+    def test_mot_entier_seulement(self):
+        self.assertFalse(est_exclue("Respite - Main Theme"))                      # « spite » ≠ « spot »
+        self.assertFalse(est_exclue("Scenery - Main Theme"))                      # « scenery » ≠ « scene »
+        self.assertFalse(est_exclue("Trailerpark Boys Theme"))                    # un mot qui contient « trailer » n'est pas « trailer »
+
+    def test_un_mot_du_titre_cherche_n_est_pas_exclu(self):
+        self.assertFalse(est_exclue("The Interview - Main Theme", "The Interview"))          # le film s'appelle « The Interview »
+        self.assertTrue(est_exclue("The Interview - Bande-annonce", "The Interview"))
+        self.assertFalse(est_exclue("Trailer Park Boys - Theme", "Trailer Park Boys"))
+        self.assertTrue(est_exclue("Trailer Park Boys - Interview", "Trailer Park Boys"))
+
+    def test_une_note_jamais_bonne_pour_un_titre_exclu(self):
+        points, raisons = source()._noter("Die Hard", {"title": "Die Hard - Main Theme (Trailer version)", "duration": 100})
+        self.assertLess(points, 0)
+
+    def test_les_candidats_ne_contiennent_aucune_video_exclue(self):
+        s = source()
+        faux = [{"id": "A" * 11, "title": "Les Tuche 4 - Bande-annonce officielle", "duration": 100},
+                {"id": "B" * 11, "title": "Les Tuche 4 - Générique fin", "duration": 90, "uploader": "OST - Topic"},
+                {"id": "C" * 11, "title": "Les Tuche 4 | Extrait exclusif", "duration": 60},
+                {"id": "D" * 11, "title": "Les Tuche 4 trailer", "duration": 130}]
+        with mock.patch.object(s, "_raw_search", return_value=faux):
+            res = s.candidates("Les Tuche 4", "movie", limit=10)
+        self.assertEqual([r["name"] for r in res], ["Les Tuche 4 - Générique fin"])
+        with mock.patch.object(s, "_raw_search", return_value=faux[:1] + faux[2:]):
+            self.assertEqual(s.candidates("Les Tuche 4", "movie", limit=10), [])         # rien : plutôt aucun choix qu'une bande-annonce
 
 
 class CandidatsTest(unittest.TestCase):

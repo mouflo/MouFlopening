@@ -31,7 +31,19 @@ _GOOD_MAX = 40                  # un titre bourré de mots-clés n'en gagne pas 
 _BAD = ("reaction", "cover", "remix", "lyrics", "karaoke", "tutorial", "piano", "guitar", "10 hours", "1 hour", "episode", "trailer", "review",
         "compilation", "best of", "top 10", "top 5", "all themes", "every ", "playlist", "mashup", "nightcore", "slowed", "reverb", "8d ", "bass boost",
         "ranking", "full album", "full movie", "behind the scenes", "making of", "parody", "parodie")
+# Vidéos où l'on PARLE (bande-annonce, extrait, interview, critique…) : jamais proposées, ni même gardées en bas de liste. Chaque entrée est cherchée comme
+# mot entier dans le titre, sans accents ni ponctuation (« Bande-annonce » = « bande annonce »).
+_EXCLUS = ("bande annonce", "ba officielle", "ba vf", "ba vostfr", "trailer", "teaser", "tv spot", "spot tv", "spot", "featurette", "extrait", "extract",
+           "scene", "clip film", "interview", "making of", "behind the scenes", "dans les coulisses", "critique", "review", "analyse", "explication",
+           "reaction", "podcast", "film complet", "full movie", "en entier", "episode")
 _STOP = {"the", "a", "an", "of", "and", "et", "le", "la", "les", "l", "de", "des", "du", "un", "une", "in", "on", "to"}
+
+
+def est_exclue(titre: str, cherche: str = "") -> bool:
+    """Titre de vidéo à ne jamais proposer : bande-annonce, extrait, interview, critique… (on y parle, ce n'est pas un thème).
+    Un mot qui fait partie du titre CHERCHÉ (le film « The Interview », « Trailer Park Boys ») ne compte pas : sinon plus rien ne passerait."""
+    name, voulu = " " + _plie(titre) + " ", " " + _plie(cherche) + " "
+    return any(" " + mot + " " in name and " " + mot + " " not in voulu for mot in _EXCLUS)
 
 
 def _plie(texte: str) -> str:
@@ -91,6 +103,8 @@ class YouTubeSource(BaseSource):
         brut = entry.get("title") or ""
         name, cherche = _plie(brut), _plie(title)
         raisons = []
+        if est_exclue(brut, title):
+            return -1000.0, ["bande-annonce, extrait ou vidéo parlée : jamais proposée"]
         score = similarity(title, brut) / 4                          # 0 à 25
         mots = [w for w in cherche.split() if w not in _STOP and not re.fullmatch(r"(19|20)\d{2}", w)]
         trouves = sum(1 for w in mots if re.search(r"(?<![a-z0-9])" + re.escape(w) + r"(?![a-z0-9])", name))
@@ -168,6 +182,10 @@ class YouTubeSource(BaseSource):
                 if _ID_RE.match(vid) and vid not in seen:
                     seen.add(vid)
                     entries.append(e)
+        avant = len(entries)
+        entries = [e for e in entries if not est_exclue(e.get("title") or "", title)]          # bandes-annonces, extraits, interviews… jamais proposés
+        if avant != len(entries):
+            say(f"YouTube : {avant - len(entries)} vidéo(s) écartée(s) (bande-annonce, extrait, interview…)")
         entries.sort(key=lambda e: -self._score(title, e))
         entries = entries[:max(limit * 2, 14)]
         if year:
