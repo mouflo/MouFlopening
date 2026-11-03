@@ -1,6 +1,6 @@
 #!/bin/bash
 # Définit l'identifiant et le mot de passe de MouFlopening (demandés ici, donc pas dans l'historique du terminal).
-# Facultatif : au premier déploiement, MouFlopening reprend déjà ceux de MouFloster (voir deploy.sh).
+# Facultatif : au premier déploiement, MouFlopening reprend déjà ceux de MouFloster.
 # Usage:  bash /opt/mouflopening/set-login.sh
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
