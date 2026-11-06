@@ -688,7 +688,7 @@ let venue = null;              // {appli, retour, id} : après la pose d'un gén
 function proposerRetour() {
     if (!venue || !venue.retour || !target || (target.id !== venue.id && !target.id.startsWith(venue.id + '/')) || venue.demande) return;
     venue.demande = true;
-    setTimeout(() => { if (confirm(`Générique en place 🎉\n\nRevenir à ${venue.appli} ?`)) location.href = venue.retour; }, 300);
+    setTimeout(() => { MouConfirm(`Générique en place 🎉\n\nRevenir à ${venue.appli} ?`, {ok: 'Revenir', annuler: 'Rester ici'}).then(oui => { if (oui) location.href = venue.retour; }); }, 300);
 }
 async function ouvrirDepuisLien() {
     const q = new URLSearchParams(location.search), dossier = q.get('dossier');

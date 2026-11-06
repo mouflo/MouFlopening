@@ -1,5 +1,8 @@
 # Changelog
 
+## Non publié
+- 🪟 **« Revenir à MouFloster / MouFlanga ? » dans la fenêtre du kit commun** (boutons « Revenir » et « Rester ici »), la même que dans MouFloster, au lieu de la fenêtre native du navigateur.
+
 ## [1.1] - 2026-10-27
 - 📁 **Les onglets Animes, Séries et Films reviennent tout seuls** : après un redémarrage du serveur, MouFlopening démarrait une seconde avant la fin du montage du NAS, calculait ses onglets sur un dossier vide (seul « Animes ⚠️ introuvable » restait) et ne les recalculait jamais avant le prochain redémarrage. Les onglets se recalculent maintenant dès que les dossiers apparaissent (au plus une vérification toutes les 15 secondes, seulement tant qu'un onglet manque ou est introuvable). Un partage qui disparaît un instant ne vide jamais les onglets déjà connus.
 - 🗂️ **Ouverture beaucoup plus rapide : index SQLite de la médiathèque** (`data/index.sqlite`). Avant, chaque ouverture parcourait tout le NAS (1 712 titres et 1 725 saisons : 5,5 secondes à froid, 0,8 s ensuite). Chaque titre est maintenant mémorisé avec la date de son dossier et celle de ses saisons : un titre inchangé n'est pas relu (**0,03 seconde**), un thème qui arrive ou un dossier renommé ou effacé est vu tout seul, et la liste est identique à l'ancienne. L'index est préparé au démarrage, avec un contrôle complet toutes les 15 minutes en arrière-plan. S'il est absent ou abîmé, tout est recalculé une fois, sans rien perdre. La recherche des copains l'utilise aussi.
